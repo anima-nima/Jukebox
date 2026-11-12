@@ -1,6 +1,6 @@
 // ═══ CONFIG ═══
-const API_URL = 'https://google.com';
-const SYNC_MS = 10 * 60 * 1000;
+const API_URL = 'https://script.google.com/macros/s/AKfycbzH2ScZCKVnHEHxbUb8np1ouILBmE-dhqMcqHnJOSiyyqjNdXD873tn2ZtaTqbj8F7N/exec';
+const SYNC_MS = 1 * 60 * 1000;
 
 const fileCache = new Map();
 const pendingCache = new Map();
