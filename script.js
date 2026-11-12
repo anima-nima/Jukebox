@@ -1,5 +1,5 @@
 // ═══ CONFIG ═══
-const API_URL = 'https://script.google.com/macros/s/AKfycbzH2ScZCKVnHEHxbUb8np1ouILBmE-dhqMcqHnJOSiyyqjNdXD873tn2ZtaTqbj8F7N/exec';
+const API_URL = 'https://script.google.com/macros/library/d/1vHAHSbb0f8ppoevtUXbKCmkZnq5PGg84RfnNw_gM8WxHOrRnMIkhR5Hs/3';
 const SYNC_MS = 10 * 60 * 1000;
 
 // Separate URL builders for Google Drive images and audio
