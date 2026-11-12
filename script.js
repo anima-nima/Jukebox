@@ -1,64 +1,83 @@
 // ═══ CONFIG ═══
-const API_URL = "https://script.google.com/macros/s/AKfycbzH2ScZCKVnHEHxbUb8np1ouILBmE-dhqMcqHnJOSiyyqjNdXD873tn2ZtaTqbj8F7N/exec";
+const API_URL = 'https://script.google.com/macros/s/AKfycbzH2ScZCKVnHEHxbUb8np1ouILBmE-dhqMcqHnJOSiyyqjNdXD873tn2ZtaTqbj8F7N/exec';
 const SYNC_MS = 10 * 60 * 1000;
-const driveUrl = id => "https://drive.google.com/uc?export=download&id=" + id;
+
+// Separate URL builders for Google Drive images and audio
+const imgUrl = id => `https://google.com{id}&sz=w1000`;
+const audioUrl = id => `https://google.com{id}&export=download&confirm=t`;
 
 // ═══ STATE ═══
-let S = {
-  data: {},
-  channel: null,
-  project: null,
-  tracks: [],
-  idx: -1,
-  playing: false,
-  timer: null
-};
+let S = { data: {}, channel: null, project: null, tracks: [], idx: -1, playing: false, timer: null };
 
 // ═══ DOM (einmalig) ═══
 const $ = id => document.getElementById(id);
 const el = {
-  jbLogo: $("jbLogo"), tabs: $("channelTabs"), sync: $("syncBadge"),
-  lH: $("leftHeader"), lB: $("leftBody"), lI: $("leftInfoBtn"),
-  rH: $("rightHeader"), rB: $("rightBody"), rI: $("rightInfoBtn"),
-  bA: $("bannerArea"), bI: $("bannerImg"), bO: $("bannerOverlay"), bM: $("bannerMd"),
-  tL: $("trackList"), tE: $("rightEmpty"),
-  pT: $("pbTitle"), pA: $("pbArtist"), pTm: $("pbTime"), pD: $("pbDur"),
-  pP: $("pbProgress"), pPlay: $("pbPlay"), pPrev: $("pbPrev"),
-  pNext: $("pbNext"), pRnd: $("pbRandom"),
-  audio: $("audio"),
-  mOv: $("modalOverlay"), mC: $("modalContent"), mX: $("modalClose")
+  jbLogo: $('jbLogo'),
+  tabs: $('channelTabs'),
+  sync: $('syncBadge'),
+  lH: $('leftHeader'),
+  lB: $('leftBody'),
+  lI: $('leftInfoBtn'),
+  rH: $('rightHeader'),
+  rB: $('rightBody'),
+  rI: $('rightInfoBtn'),
+  bA: $('bannerArea'),
+  bI: $('bannerImg'),
+  bO: $('bannerOverlay'),
+  bM: $('bannerMd'),
+  tL: $('trackList'),
+  tE: $('rightEmpty'),
+  pT: $('pbTitle'),
+  pA: $('pbArtist'),
+  pTm: $('pbTime'),
+  pD: $('pbDur'),
+  pP: $('pbProgress'),
+  pPlay: $('pbPlay'),
+  pPrev: $('pbPrev'),
+  pNext: $('pbNext'),
+  pRnd: $('pbRandom'),
+  audio: $('audio'),
+  mOv: $('modalOverlay'),
+  mC: $('modalContent'),
+  mX: $('modalClose')
 };
 
 // ═══ MARKDOWN ═══
 function md(s) {
-  if (!s) return "";
+  if (!s) return '';
   return s
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-    .replace(/^### (.+)$/gm,"<h3>$1</h3>")
-    .replace(/^## (.+)$/gm,"<h2>$1</h2>")
-    .replace(/^# (.+)$/gm,"<h1>$1</h1>")
-    .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g,"<em>$1</em>")
-    .replace(/`(.+?)`/g,"<code>$1</code>")
-    .replace(/^&gt; (.+)$/gm,"<blockquote>$1</blockquote>")
-    .replace(/^[-] (.+)$/gm,"<li>$1</li>")
-    .replace(/\n{2,}/g,"</p><p>")
-    .replace(/\n/g,"<br>")
-    .replace(/^/,"<p>").replace(/$/,"</p>");
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/^[-] (.+)$/gm, '<li>$1</li>')
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+    .replace(/^/, '<p>')
+    .replace(/$/, '</p>');
 }
 
 // ═══ SYNC ═══
 async function sync() {
   try {
-    const res = await fetch(API_URL + "?action=sync", { redirect: "follow" });
+    const res = await fetch(API_URL + '?action=sync', { redirect: 'follow' });
     const json = await res.json();
     S.data = json.data;
-    el.sync.textContent = new Date().toLocaleTimeString() + (json.fromCache ? " (C)" : "");
-    if (S.data.error) { el.sync.textContent = "Fehler"; return; }
+    el.sync.textContent = new Date().toLocaleTimeString() + (json.fromCache ? ' (C)' : '');
+    if (S.data.error) {
+      el.sync.textContent = 'Fehler';
+      return;
+    }
     renderTop();
     renderTabs();
   } catch (e) {
-    el.sync.textContent = "Fehler: " + e.message;
+    el.sync.textContent = 'Fehler: ' + e.message;
   }
 }
 
@@ -70,23 +89,28 @@ function startSync() {
 // ═══ RENDER: TOP ═══
 function renderTop() {
   const jb = S.data.__jukebox;
-  if (jb && jb.image) { el.jbLogo.src = driveUrl(jb.image); el.jbLogo.style.display = "block"; }
-  else el.jbLogo.style.display = "none";
+  if (jb && jb.image) {
+    el.jbLogo.src = imgUrl(jb.image);
+    el.jbLogo.style.display = 'block';
+  } else {
+    el.jbLogo.style.display = 'none';
+  }
 }
 
 function renderTabs() {
-  el.tabs.innerHTML = "";
-  const names = Object.keys(S.data).filter(k => k !== "__jukebox");
-  if (!names.length) { el.tabs.innerHTML = '<div class="empty">Keine Channels</div>'; return; }
-
+  el.tabs.innerHTML = '';
+  const names = Object.keys(S.data).filter(k => k !== '__jukebox');
+  if (!names.length) {
+    el.tabs.innerHTML = '<div class="empty">Keine Channels</div>';
+    return;
+  }
   names.forEach(n => {
-    const t = document.createElement("div");
-    t.className = "channel-tab" + (n === S.channel ? " active" : "");
+    const t = document.createElement('div');
+    t.className = 'channel-tab' + (n === S.channel ? ' active' : '');
     t.textContent = n;
     t.onclick = () => selectChannel(n);
     el.tabs.appendChild(t);
   });
-
   if (!S.channel || !S.data[S.channel]) selectChannel(names[0]);
 }
 
@@ -104,42 +128,51 @@ function selectChannel(name) {
 
 function renderLeft() {
   const ch = S.data[S.channel];
-  if (!ch) { el.lB.innerHTML = '<div class="empty">–</div>'; return; }
-
-  el.lH.textContent = "Projekte";
+  if (!ch) {
+    el.lB.innerHTML = '<div class="empty">–</div>';
+    return;
+  }
+  el.lH.textContent = 'Projekte';
 
   // Channel info
   if (ch.md || ch.qr) {
-    el.lI.style.display = "flex";
+    el.lI.style.display = 'flex';
     el.lI.onclick = () => {
-      let h = "";
-      if (ch.qr) h += '<img src="' + driveUrl(ch.qr) + '" alt="QR">';
-      if (ch.md) h += '<div class="md-body">' + md(ch.md) + '</div>';
+      let h = '';
+      if (ch.qr) h += `<img src="${imgUrl(ch.qr)}" alt="QR">`;
+      if (ch.md) h += `<div class="md-body">${md(ch.md)}</div>`;
       modal(h || '<p class="empty">Keine Infos</p>');
     };
-  } else el.lI.style.display = "none";
+  } else {
+    el.lI.style.display = 'none';
+  }
 
-  el.lB.innerHTML = "";
-  if (!ch.projects || !ch.projects.length) { el.lB.innerHTML = '<div class="empty">Keine Projekte</div>'; return; }
+  el.lB.innerHTML = '';
+  if (!ch.projects || !ch.projects.length) {
+    el.lB.innerHTML = '<div class="empty">Keine Projekte</div>';
+    return;
+  }
 
-  const g = document.createElement("div");
-  g.className = "project-grid";
-
+  const g = document.createElement('div');
+  g.className = 'project-grid';
   ch.projects.forEach(p => {
-    const c = document.createElement("div");
-    c.className = "project-card" + (p.name === S.project ? " active" : "");
+    const c = document.createElement('div');
+    c.className = 'project-card' + (p.name === S.project ? ' active' : '');
     c.innerHTML =
-      (p.image ? '<img class="card-img" src="' + driveUrl(p.image) + '" alt="">' : "") +
-      '<div class="card-info"><div class="card-name">' + p.name + '</div>' +
-      '<div class="card-count">' + p.tracks.length + ' Tracks</div></div>' +
-      (p.qr ? '<img class="card-qr" src="' + driveUrl(p.qr) + '" data-qr="' + driveUrl(p.qr) + '">' : "");
-
+      (p.image ? `<img class="card-img" src="${imgUrl(p.image)}" alt="">` : '') +
+      `<div class="card-info"><div class="card-name">${p.name}</div>` +
+      `<div class="card-count">${p.tracks.length} Tracks</div></div>` +
+      (p.qr ? `<img class="card-qr" src="${imgUrl(p.qr)}" data-qr="${imgUrl(p.qr)}">` : '');
     c.onclick = () => selectProject(p);
-    const q = c.querySelector(".card-qr");
-    if (q) q.onclick = e => { e.stopPropagation(); modal('<img src="' + q.dataset.qr + '" alt="QR">'); };
+    const q = c.querySelector('.card-qr');
+    if (q) {
+      q.onclick = e => {
+        e.stopPropagation();
+        modal(`<img src="${q.dataset.qr}" alt="QR">`);
+      };
+    }
     g.appendChild(c);
   });
-
   el.lB.appendChild(g);
 }
 
@@ -156,72 +189,88 @@ function selectProject(p) {
 function renderRight() {
   const ch = S.data[S.channel];
   const proj = ch?.projects?.find(p => p.name === S.project);
-
-  el.rH.textContent = S.project || "Tracks";
+  el.rH.textContent = S.project || 'Tracks';
 
   // Project info
   if (proj && (proj.md || proj.qr)) {
-    el.rI.style.display = "flex";
+    el.rI.style.display = 'flex';
     el.rI.onclick = () => {
-      let h = "";
-      if (proj.qr) h += '<img src="' + driveUrl(proj.qr) + '" alt="QR">';
-      if (proj.md) h += '<div class="md-body">' + md(proj.md) + '</div>';
+      let h = '';
+      if (proj.qr) h += `<img src="${imgUrl(proj.qr)}" alt="QR">`;
+      if (proj.md) h += `<div class="md-body">${md(proj.md)}</div>`;
       modal(h || '<p class="empty">Keine Infos</p>');
     };
-  } else el.rI.style.display = "none";
+  } else {
+    el.rI.style.display = 'none';
+  }
 
   // Banner
   if (proj && proj.image) {
-    el.bA.style.display = "block";
-    el.bI.src = driveUrl(proj.image);
-    if (proj.md) { el.bO.style.display = "flex"; el.bM.innerHTML = md(proj.md); }
-    else el.bO.style.display = "none";
-  } else el.bA.style.display = "none";
+    el.bA.style.display = 'block';
+    el.bI.src = imgUrl(proj.image);
+    if (proj.md) {
+      el.bO.style.display = 'flex';
+      el.bM.innerHTML = md(proj.md);
+    } else {
+      el.bO.style.display = 'none';
+    }
+  } else {
+    el.bA.style.display = 'none';
+  }
 
   // Tracks
-  el.tL.innerHTML = "";
-  el.tE.style.display = S.tracks.length ? "none" : "block";
-
+  el.tL.innerHTML = '';
+  el.tE.style.display = S.tracks.length ? 'none' : 'block';
   S.tracks.forEach((t, i) => {
-    const li = document.createElement("li");
-    li.className = "track-item" + (i === S.idx ? " active" : "");
+    const li = document.createElement('li');
+    li.className = 'track-item' + (i === S.idx ? ' active' : '');
     li.innerHTML =
-      (t.image ? '<img class="track-thumb" src="' + driveUrl(t.image) + '" alt="">' : '<span class="track-num">' + (i+1) + '</span>') +
-      '<div class="track-meta"><div class="track-name">' + t.title + '</div>' +
-      '<div class="track-artist">' + t.artist + '</div></div>' +
-      ((t.md || t.qr) ? '<button class="track-info-btn">i</button>' : "");
-
+      (t.image ? `<img class="track-thumb" src="${imgUrl(t.image)}" alt="">` : `<span class="track-num">${i + 1}</span>`) +
+      `<div class="track-meta"><div class="track-name">${t.title}</div>` +
+      `<div class="track-artist">${t.artist}</div></div>` +
+      ((t.md || t.qr) ? '<button class="track-info-btn">i</button>' : '');
     li.onclick = () => play(i);
-    const ib = li.querySelector(".track-info-btn");
-    if (ib) ib.onclick = e => { e.stopPropagation(); trackInfo(i); };
+    const ib = li.querySelector('.track-info-btn');
+    if (ib) {
+      ib.onclick = e => {
+        e.stopPropagation();
+        trackInfo(i);
+      };
+    }
     el.tL.appendChild(li);
   });
 }
 
 // ═══ MODAL ═══
-function modal(html) { el.mC.innerHTML = html; el.mOv.classList.add("open"); }
+function modal(html) {
+  el.mC.innerHTML = html;
+  el.mOv.classList.add('open');
+}
+
 function trackInfo(i) {
   const t = S.tracks[i];
-  let h = "";
-  if (t.qr) h += '<img src="' + driveUrl(t.qr) + '" alt="QR">';
-  if (t.md) h += '<div class="md-body">' + md(t.md) + '</div>';
+  let h = '';
+  if (t.qr) h += `<img src="${imgUrl(t.qr)}" alt="QR">`;
+  if (t.md) h += `<div class="md-body">${md(t.md)}</div>`;
   modal(h || '<p class="empty">Keine Infos</p>');
 }
 
-el.mX.onclick = () => el.mOv.classList.remove("open");
-el.mOv.onclick = e => { if (e.target === el.mOv) el.mOv.classList.remove("open"); };
+el.mX.onclick = () => el.mOv.classList.remove('open');
+el.mOv.onclick = e => {
+  if (e.target === el.mOv) el.mOv.classList.remove('open');
+};
 
 // ═══ PLAYBACK ═══
 function play(i) {
   if (i < 0 || i >= S.tracks.length) return;
   S.idx = i;
   const t = S.tracks[i];
-  el.audio.src = driveUrl(t.audioId);
+  el.audio.src = audioUrl(t.audioId);
   el.pT.textContent = t.title;
   el.pA.textContent = t.artist;
-  el.audio.play().catch(e => console.warn(e));
+  el.audio.play().catch(e => console.warn('Audio playback error:', e));
   S.playing = true;
-  el.pPlay.textContent = "■";
+  el.pPlay.textContent = '■';
   renderRight();
 }
 
@@ -232,14 +281,14 @@ function togglePlay() {
     el.audio.pause();
     el.audio.currentTime = 0;
     S.playing = false;
-    el.pPlay.textContent = "▶";
-    el.pTm.textContent = "0:00";
+    el.pPlay.textContent = '▶';
+    el.pTm.textContent = '0:00';
     el.pP.value = 0;
   } else {
-    // START: play (from current position or from 0)
-    el.audio.play().catch(e => console.warn(e));
+    // START: play
+    el.audio.play().catch(e => console.warn('Audio playback error:', e));
     S.playing = true;
-    el.pPlay.textContent = "■";
+    el.pPlay.textContent = '■';
   }
 }
 
@@ -247,8 +296,8 @@ function stop() {
   el.audio.pause();
   el.audio.currentTime = 0;
   S.playing = false;
-  el.pPlay.textContent = "▶";
-  el.pTm.textContent = "0:00";
+  el.pPlay.textContent = '▶';
+  el.pTm.textContent = '0:00';
   el.pP.value = 0;
 }
 
@@ -265,15 +314,16 @@ function next() {
 function random() {
   if (!S.tracks.length) return;
   let i;
-  do { i = Math.floor(Math.random() * S.tracks.length); }
-  while (i === S.idx && S.tracks.length > 1);
+  do {
+    i = Math.floor(Math.random() * S.tracks.length);
+  } while (i === S.idx && S.tracks.length > 1);
   play(i);
 }
 
 // ═══ HELPERS ═══
 function fmt(s) {
-  if (!isFinite(s)) return "0:00";
-  return Math.floor(s/60) + ":" + String(Math.floor(s%60)).padStart(2,"0");
+  if (!isFinite(s)) return '0:00';
+  return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 }
 
 // ═══ EVENTS ═══
@@ -288,7 +338,11 @@ el.audio.ontimeupdate = () => {
     el.pP.value = (el.audio.currentTime / el.audio.duration) * 100;
   }
 };
-el.audio.onloadedmetadata = () => { el.pD.textContent = fmt(el.audio.duration); };
+
+el.audio.onloadedmetadata = () => {
+  el.pD.textContent = fmt(el.audio.duration);
+};
+
 el.audio.onended = next;
 
 el.pP.oninput = () => {
@@ -296,12 +350,15 @@ el.pP.oninput = () => {
 };
 
 document.onkeydown = e => {
-  if (e.target.tagName === "INPUT") return;
-  if (e.code === "Space") { e.preventDefault(); togglePlay(); }
-  if (e.code === "ArrowLeft") prev();
-  if (e.code === "ArrowRight") next();
-  if (e.code === "KeyR") random();
-  if (e.code === "Escape") el.mOv.classList.remove("open");
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    togglePlay();
+  }
+  if (e.code === 'ArrowLeft') prev();
+  if (e.code === 'ArrowRight') next();
+  if (e.code === 'KeyR') random();
+  if (e.code === 'Escape') el.mOv.classList.remove('open');
 };
 
 // ═══ INIT ═══
