@@ -1,410 +1,410 @@
-window.addEventListener("load", event => {
-   ////////////////
-   // Variables
-   ////////////////
+// ============================================================================
+// PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL BELOW:
+// ============================================================================
+const GOOGLE_SCRIPT_URL = "PASTE_YOUR_GOOGLE_APPS_SCRIPT_URL_HERE";
 
-   const iconTopExpand = document.querySelector(".icon.topExpand"),
-         iconBottomExpand = document.querySelector(".icon.bottomExpand"),
-         topContent = document.querySelector(".topContent"),
-         bottomContent = document.querySelector(".bottomContent"),
-         playBtn = document.querySelector(".btnPlay"),
-         musicGroups = document.querySelector(".swiper-wrapper.slider-two"),
-         swipperWrapper = document.querySelector(".swiper-wrapper.slider-one"),
-         imageBg = document.querySelector(".imageBg"),
-         albumBg = document.querySelector(".albumBg"),
-         wrapper = document.querySelector(".wrapper"),
-         bodyBg = document.querySelector(".bodyBg"),
-         next = document.querySelector(".swiper-button-next"),
-         prev = document.querySelector(".swiper-button-prev");
+const SYNC_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes silent background sync
 
-   // Songs
-   const songs = [
-      {
-         img: "https://www.rafaelalucas.com/dailyui/9/covers/jain.jpg",
-         artistName: "Jain",
-         songName: "Makeba",
-         song: "https://www.rafaelalucas.com/dailyui/9/songs/song1.mp3",
-         color: "#f5c63d"
-      },
-      {
-         img: "https://www.rafaelalucas.com/dailyui/9/covers/ohland.jpg",
-         artistName: "Oh Land",
-         songName: "Postpone the Bad",
-         song: "https://www.rafaelalucas.com/dailyui/9/songs/song2.mp3",
-         color: "#afc5c3"
-      },
-      {
-         img: "https://www.rafaelalucas.com/dailyui/9/covers/angele.jpg",
-         artistName: "Angèle",
-         songName: "La Loi de Murphy",
-         song: "https://www.rafaelalucas.com/dailyui/9/songs/song3.mp3",
-         color: "#74c2dd"
-      },
-      {
-         img: "https://www.rafaelalucas.com/dailyui/9/covers/broods.jpg",
-         artistName: "Broods",
-         songName: "Bridges",
-         song: "https://www.rafaelalucas.com/dailyui/9/songs/song1.mp3",
-         color: "#a3b8b0"
-      },
-      {
-         img: "https://www.rafaelalucas.com/dailyui/9/covers/alice.jpg",
-         artistName: "Alice Phoebe Lou",
-         songName: "Orbit",
-         song: "https://www.rafaelalucas.com/dailyui/9/songs/song2.mp3",
-         color: "#38736d"
-      },
-      {
-         img: "https://www.rafaelalucas.com/dailyui/9/covers/feist.jpg",
-         artistName: "Feist",
-         songName: "The Bad in Each Other",
-         song: "https://www.rafaelalucas.com/dailyui/9/songs/song3.mp3",
-         color: "#a4b1b2"
-      },
+window.addEventListener("load", () => {
+  // DOM Elements
+  const channelBtns = document.querySelectorAll(".channelBtn"),
+        channelLogo = document.getElementById("channelLogo"),
+        channelTitle = document.getElementById("channelTitle"),
+        channelInfoBtn = document.getElementById("channelInfoBtn"),
+        projectTabs = document.getElementById("projectTabs"),
+        trackWrapper = document.getElementById("trackWrapper"),
+        audioEngine = document.getElementById("audioEngine"),
+        playPauseBtn = document.getElementById("playPauseBtn"),
+        playIcon = document.getElementById("playIcon"),
+        pauseIcon = document.getElementById("pauseIcon"),
+        prevBtn = document.getElementById("prevBtn"),
+        nextBtn = document.getElementById("nextBtn"),
+        shuffleBtn = document.getElementById("shuffleBtn"),
+        repeatBtn = document.getElementById("repeatBtn"),
+        progressTrack = document.getElementById("progressTrack"),
+        progressFill = document.getElementById("progressFill"),
+        currentTimeEl = document.getElementById("currentTime"),
+        endTimeEl = document.getElementById("endTime"),
+        contextBadge = document.getElementById("contextBadge"),
+        infoTitle = document.getElementById("infoTitle"),
+        infoSubtitle = document.getElementById("infoSubtitle"),
+        infoBody = document.getElementById("infoBody"),
+        qrBox = document.getElementById("qrBox"),
+        qrImage = document.getElementById("qrImage"),
+        syncText = document.getElementById("syncText");
 
-      {
-         img: "https://www.rafaelalucas.com/dailyui/9/covers/dagny.jpg",
-         artistName: "Dagny",
-         songName: "Ultraviolet",
-         song: "https://www.rafaelalucas.com/dailyui/9/songs/song1.mp3",
-         color: "#8098ce"
-      },
-      {
-         img: "https://www.rafaelalucas.com/dailyui/9/covers/sigrid.jpg",
-         artistName: "Sigrid",
-         songName: "Dynamite",
-         song: "https://www.rafaelalucas.com/dailyui/9/songs/song2.mp3",
-         color: "#1a91bd"
-      }
-   ];
+  // Application State
+  let libraryData = null;
+  let activeChannel = "hitproducer";
+  let activeProjectId = null;
+  let activeTrackId = null;
+  let isPlaying = false;
+  let isShuffle = false;
+  let isRepeat = false;
+  let swiper = null;
 
-   // Music Groups
-   const groups = [
-      {
-         title: "Songs",
-         img: "https://www.rafaelalucas.com/dailyui/9/covers/img06.jpg"
-      },
-      {
-         title: "Artists",
-         img: "https://www.rafaelalucas.com/dailyui/9/covers/img07.jpg"
-      },
-      {
-         title: "Playlists",
-         img:
-         "https://images.pexels.com/photos/761963/pexels-photo-761963.jpeg?auto=compress&cs=tinysrgb&dpr=2&w=400"
-      },
-      {
-         title: "Favourites",
-         img: "https://www.rafaelalucas.com/dailyui/9/covers/img10.jpg"
-      }
-   ];
+  // 1. Fetch Library from Google Drive Bridge
+  async function syncLibrary(isInitial = false) {
+    if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("PASTE_YOUR")) {
+      infoTitle.textContent = "Setup Required";
+      infoBody.innerHTML = "<p>Please paste your Google Apps Script Web App URL into <strong>script.js</strong>.</p>";
+      return;
+    }
 
-   // Playlists
-   const playlists = [
-      {
-         title: "Pop Music",
-         img:
-         "https://images.pexels.com/photos/761963/pexels-photo-761963.jpeg?auto=compress&cs=tinysrgb&dpr=2&w=400"
-      },
-      {
-         title: "On the road!",
-         img:
-         "https://images.pexels.com/photos/3049327/pexels-photo-3049327.jpeg?auto=compress&cs=tinysrgb&dpr=2&w=400"
-      },
-      {
-         title: "Christmas Songs",
-         img:
-         "https://images.pexels.com/photos/1661905/pexels-photo-1661905.jpeg?auto=compress&cs=tinysrgb&dpr=2&w=400"
-      },
-      {
-         title: "Rainy days",
-         img:
-         "https://images.pexels.com/photos/216657/pexels-photo-216657.jpeg?auto=compress&cs=tinysrgb&dpr=2&w=400"
-      }
-   ];
+    try {
+      syncText.textContent = "Syncing...";
+      const response = await fetch(`${GOOGLE_SCRIPT_URL}?t=${Date.now()}`);
+      const freshData = await response.json();
 
-   ////////////////
-   // Events
-   ////////////////
+      libraryData = freshData;
+      const now = new Date();
+      syncText.textContent = `Synced ${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 
-   iconTopExpand.addEventListener("click", expandTop);
-   iconBottomExpand.addEventListener("click", expandBottom);
-   playBtn.addEventListener("click", playSong);
-
-   ////////////////
-   // Functions
-   ////////////////
-
-   function playSong() {
-      if (playBtn.classList.contains("pause")) {
-         playBtn.classList.remove("pause");
-         document.querySelector(".swiper-slide-active audio").pause();
+      if (isInitial) {
+        renderChannel(activeChannel);
       } else {
-         playBtn.classList.add("pause");
-         document.querySelector(".swiper-slide-active audio").play();
+        reconcileActiveView();
       }
-      progressBar();
-   }
+    } catch (err) {
+      console.error("Sync error:", err);
+      syncText.textContent = "Offline";
+    }
+  }
 
-   function expandTop() {
-      if (topContent.classList.contains("expand")) {
-         topContent.classList.remove("expand");
-      } else {
-         topContent.classList.add("expand");
+  // 2. Render Selected Channel (Hitproducer / kHaus)
+  function renderChannel(channelKey) {
+    activeChannel = channelKey;
+    document.body.setAttribute("data-channel", channelKey);
 
-         //Swiper Music Goups
-         var mySwiper2 = new Swiper(".swiper-container.slider-two", {
-            // Optional parameters
-            direction: "horizontal",
-            slidesPerView: "auto",
-            draggable: true
-         });
-      }
-      albumSize();
-   }
+    channelBtns.forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.channel === channelKey);
+    });
 
-   function expandBottom() {
-      if (bottomContent.classList.contains("expand")) {
-         bottomContent.classList.remove("expand");
-      } else {
-         bottomContent.classList.add("expand");
-      }
-      albumSize();
-      progressBar();
-   }
+    if (!libraryData || !libraryData.channels[channelKey]) return;
 
-   // change Album size
+    const ch = libraryData.channels[channelKey];
+    channelTitle.textContent = ch.name || channelKey;
+    channelLogo.src = ch.logoUrl || "";
+    channelLogo.style.visibility = ch.logoUrl ? "visible" : "hidden";
 
-   function albumSize() {
-      const albumContent = document.querySelectorAll(".albumContent");
+    renderProjectTabs(ch.projects);
 
-      if (
-         topContent.classList.contains("expand") &&
-         bottomContent.classList.contains("expand")
-      ) {
-         albumContent.forEach(function(el) {
-            el.classList.add("small");
-         });
-      } else {
-         albumContent.forEach(function(el) {
-            el.classList.remove("small");
-         });
-      }
-   }
+    if (ch.projects && ch.projects.length > 0) {
+      const targetProj = ch.projects.find(p => p.id === activeProjectId) || ch.projects[0];
+      selectProject(targetProj.id, false);
+    } else {
+      activeProjectId = null;
+      renderTracks([]);
+      showChannelInfo();
+    }
+  }
 
-   //Swiper Albums
+  // 3. Render Project Subfolder Tabs
+  function renderProjectTabs(projects) {
+    projectTabs.innerHTML = "";
+    if (!projects) return;
 
-   songs.forEach(function(el) {
-      let template = `
-<div class="swiper-slide">
-<div class="settings">
-<div class="icon heart"></div>
-<div class="icon plus"></div>
-</div>
-<audio src="${el.song}"></audio>
-<div class="albumContent">
-<div class="albumCover" style="background-color:${
-      el.color
-      }"><img src="${el.img}"></div>
-<p class="artistName">${el.artistName}</p>
-<p class="songName">${el.songName}</p></div>
-<div class="playlistsContent">
-<div class="icon close"></div>
-</div>
-</div>`;
+    projects.forEach(proj => {
+      const btn = document.createElement("button");
+      btn.className = "projectTab" + (proj.id === activeProjectId ? " active" : "");
+      btn.dataset.projectId = proj.id;
+      btn.innerHTML = `
+        ${proj.logoUrl ? `<img src="${proj.logoUrl}" alt="">` : ""}
+        <span>${proj.name}</span>
+      `;
+      btn.addEventListener("click", () => selectProject(proj.id, true));
+      projectTabs.appendChild(btn);
+    });
+  }
 
-      swipperWrapper.insertAdjacentHTML("beforeend", template);
-   });
+  // 4. Select a Project Subfolder
+  function selectProject(projectId, showProjectNotes = false) {
+    activeProjectId = projectId;
+    document.querySelectorAll(".projectTab").forEach(tab => {
+      tab.classList.toggle("active", tab.dataset.projectId === projectId);
+    });
 
-   // To Create Playlists
-   playlists.forEach(function(el) {
-      let templatePlaylist = `
-<div class="playlist">
-<span class="checkbox"></span>
-<figure class="playlistBg"><img src="${el.img}"></figure>
-<figure class="playlistThumb"><img src="${el.img}"></figure>
-<p class="playlistTitle">${el.title}</p></div>`;
+    const ch = libraryData.channels[activeChannel];
+    const proj = ch.projects.find(p => p.id === projectId);
+    if (!proj) return;
 
-      var playlistContent = document.querySelectorAll(".playlistsContent");
+    renderTracks(proj.tracks);
 
-      playlistContent.forEach(function(el) {
-         el.insertAdjacentHTML("beforeend", templatePlaylist);
-      });
-   });
+    if (showProjectNotes && proj.descriptionHtml && proj.tracks.length === 0) {
+      showProjectInfo(proj);
+    }
+  }
 
-   // Slider Songs (Middle)
+  // 5. Render Swiper Track Slides
+  function renderTracks(tracks) {
+    if (swiper) {
+      swiper.destroy(true, true);
+      swiper = null;
+    }
 
-   var mySwiper = new Swiper(".swiper-container.slider-one", {
-      // Optional parameters
+    trackWrapper.innerHTML = "";
+
+    if (!tracks || tracks.length === 0) {
+      trackWrapper.innerHTML = `
+        <div class="swiper-slide">
+          <div class="coverFrame"></div>
+          <p class="slideArtist">Empty Folder</p>
+          <h3 class="slideTitle">No Audio Tracks Found</h3>
+        </div>`;
+      return;
+    }
+
+    tracks.forEach(track => {
+      const slide = document.createElement("div");
+      slide.className = "swiper-slide";
+      slide.dataset.trackId = track.id;
+      slide.innerHTML = `
+        <div class="coverFrame">
+          <img src="${track.imageUrl}" alt="${track.title}">
+        </div>
+        <p class="slideArtist">${track.artist}</p>
+        <h3 class="slideTitle">${track.title}</h3>
+      `;
+      trackWrapper.appendChild(slide);
+    });
+
+    const initialIdx = Math.max(0, tracks.findIndex(t => t.id === activeTrackId));
+
+    swiper = new Swiper(".trackSwiper", {
       direction: "horizontal",
-      loop: true,
-      centeredSlides: true,
-      slidesPerView: 1,
-      spaceBetween: 20,
-      speed: 600,
-      allowTouchMove: false,
       effect: "coverflow",
-
+      centeredSlides: true,
+      slidesPerView: "auto",
+      initialSlide: initialIdx,
+      speed: 450,
       coverflowEffect: {
-         rotate: 40,
-         slideShadows: false
+        rotate: 30,
+        stretch: 0,
+        depth: 120,
+        modifier: 1,
+        slideShadows: false
       },
-
-      // Navigation arrows
-      navigation: {
-         nextEl: ".swiper-button-next",
-         prevEl: ".swiper-button-prev"
+      on: {
+        slideChange: function() {
+          const newTrack = tracks[this.activeIndex];
+          if (newTrack) {
+            loadTrack(newTrack, isPlaying);
+          }
+        }
       }
-   });
+    });
 
-   // Change Song & Album BG
-   next.addEventListener("click", changeSong);
-   prev.addEventListener("click", changeSong);
+    // Load initial track if not already playing this exact track
+    const currentTrack = tracks[initialIdx];
+    if (currentTrack && currentTrack.id !== activeTrackId) {
+      loadTrack(currentTrack, false);
+    } else if (currentTrack) {
+      updateTrackInfoPanel(currentTrack);
+    }
+  }
 
-   function changeSong() {
-      if (playBtn.classList.contains("pause")) {
-         document.querySelectorAll("audio").forEach(function(el) {
-            el.pause();
-         });
-         document.querySelector(".swiper-slide-active audio").play();
+  // 6. Silent 10-Minute Reconciliation (Continuous Playback Safe)
+  function reconcileActiveView() {
+    const ch = libraryData.channels[activeChannel];
+    if (!ch) return;
+
+    channelTitle.textContent = ch.name || activeChannel;
+    if (ch.logoUrl) channelLogo.src = ch.logoUrl;
+
+    renderProjectTabs(ch.projects);
+
+    const proj = ch.projects.find(p => p.id === activeProjectId) || ch.projects[0];
+    if (!proj) {
+      renderTracks([]);
+      return;
+    }
+    activeProjectId = proj.id;
+
+    const currentSlideIds = Array.from(trackWrapper.querySelectorAll(".swiper-slide"))
+      .map(el => el.dataset.trackId);
+    const freshIds = proj.tracks.map(t => t.id);
+
+    const hasListChanged =
+      currentSlideIds.length !== freshIds.length ||
+      currentSlideIds.some((id, idx) => id !== freshIds[idx]);
+
+    if (!hasListChanged) {
+      // List is identical: update active track metadata/description in place without touching audio
+      const activeObj = proj.tracks.find(t => t.id === activeTrackId);
+      if (activeObj) updateTrackInfoPanel(activeObj);
+      return;
+    }
+
+    // Check if the currently playing song still exists in the updated folder
+    const stillExists = proj.tracks.find(t => t.id === activeTrackId);
+    if (stillExists) {
+      // Rebuild slides around the currently playing track without interrupting audioEngine
+      renderTracks(proj.tracks);
+    } else {
+      // Currently playing folder was deleted: smoothly load the first available track
+      activeTrackId = null;
+      renderTracks(proj.tracks);
+      if (proj.tracks.length > 0 && isPlaying) {
+        loadTrack(proj.tracks[0], true);
       }
-      changeBg();
-      progressBar();
-      closePlaylists();
-      changeBgColor();
-   }
+    }
+  }
 
-   function changeBg() {
-      albumBg.classList.add("animeBg");
+  // 7. Load & Play Audio Track
+  function loadTrack(track, autoPlay = false) {
+    activeTrackId = track.id;
+    updateTrackInfoPanel(track);
 
-      setTimeout(() => {
-         imageBg.src = document.querySelector(
-            ".slider-one .swiper-slide-active img"
-         ).src;
-      }, 300);
+    if (audioEngine.src !== track.audioUrl) {
+      audioEngine.src = track.audioUrl;
+      progressFill.style.width = "0%";
+      currentTimeEl.textContent = "00:00";
+      endTimeEl.textContent = "00:00";
+    }
 
-      setTimeout(() => {
-         albumBg.classList.remove("animeBg");
-      }, 700);
-   }
+    if (autoPlay) {
+      audioEngine.play().then(() => {
+        setPlayState(true);
+      }).catch(() => {
+        setPlayState(false);
+      });
+    }
+  }
 
-   function changeBgColor() {
-      var getColor = document.querySelector(
-         ".slider-one .swiper-slide-active .albumCover"
-      ),
-          activeColor = getColor.style.backgroundColor;
+  function setPlayState(playing) {
+    isPlaying = playing;
+    playIcon.classList.toggle("hidden", playing);
+    pauseIcon.classList.toggle("hidden", !playing);
+  }
 
-      setTimeout(() => {
-         bodyBg.style.backgroundColor = activeColor;
-      }, 200);
-   }
+  // 8. Right-Side Description & QR Code Panel
+  function updateTrackInfoPanel(track) {
+    contextBadge.textContent = "TRACK INFO";
+    infoTitle.textContent = track.title;
+    infoSubtitle.textContent = track.artist;
+    infoBody.innerHTML = track.descriptionHtml || "<p>No description available for this track.</p>";
 
-   // Music Groups
+    if (track.qrUrl) {
+      qrImage.src = track.qrUrl;
+      qrBox.classList.remove("hidden");
+    } else {
+      qrBox.classList.add("hidden");
+    }
+  }
 
-   for (let i = 0; i < groups.length; i++) {
-      const { title, img } = groups[i];
+  function showProjectInfo(proj) {
+    contextBadge.textContent = "PROJECT INFO";
+    infoTitle.textContent = proj.name;
+    infoSubtitle.textContent = channelTitle.textContent;
+    infoBody.innerHTML = proj.descriptionHtml || "No project description available.";
+    qrBox.classList.add("hidden");
+  }
 
-      var template2 = `<div class="swiper-slide group">
-<figure><img src="${img}"></figure>
-<p class = "titleGroup">${title}</p>
-</div>`;
+  function showChannelInfo() {
+    const ch = libraryData?.channels[activeChannel];
+    if (!ch) return;
+    contextBadge.textContent = "CHANNEL INFO";
+    infoTitle.textContent = ch.name;
+    infoSubtitle.textContent = "Channel Overview";
+    infoBody.innerHTML = ch.descriptionHtml || "No channel description available.";
+    qrBox.classList.add("hidden");
+  }
 
-      musicGroups.insertAdjacentHTML("beforeend", template2);
-   }
+  // Event Listeners
+  channelBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.channel !== activeChannel) {
+        activeProjectId = null;
+        renderChannel(btn.dataset.channel);
+      }
+    });
+  });
 
-   // Add favourites & Playlist
+  channelInfoBtn.addEventListener("click", showChannelInfo);
 
-   const heart = document.querySelectorAll(".heart"),
-         plus = document.querySelectorAll(".plus"),
-         close = document.querySelectorAll(".close"),
-         playlist = document.querySelectorAll(".playlist");
+  playPauseBtn.addEventListener("click", () => {
+    if (!audioEngine.src) return;
+    if (audioEngine.paused) {
+      audioEngine.play().then(() => setPlayState(true));
+    } else {
+      audioEngine.pause();
+      setPlayState(false);
+    }
+  });
 
-   heart.forEach(function(el) {
-      el.addEventListener("click", addFave);
-   });
+  prevBtn.addEventListener("click", () => {
+    if (swiper) swiper.slidePrev();
+  });
 
-   plus.forEach(function(el) {
-      el.addEventListener("click", openPlaylists);
-   });
+  nextBtn.addEventListener("click", () => {
+    if (!swiper) return;
+    if (isShuffle && swiper.slides.length > 1) {
+      let rand;
+      do {
+        rand = Math.floor(Math.random() * swiper.slides.length);
+      } while (rand === swiper.activeIndex);
+      swiper.slideTo(rand);
+    } else {
+      swiper.slideNext();
+    }
+  });
 
-   close.forEach(function(el) {
-      el.addEventListener("click", openPlaylists);
-   });
+  shuffleBtn.addEventListener("click", () => {
+    isShuffle = !isShuffle;
+    shuffleBtn.classList.toggle("active", isShuffle);
+  });
 
-   playlist.forEach(function(el) {
-      el.addEventListener("click", addPlaylist);
-   });
+  repeatBtn.addEventListener("click", () => {
+    isRepeat = !isRepeat;
+    repeatBtn.classList.toggle("active", isRepeat);
+  });
 
-   function addFave(e) {
-      if (e.currentTarget.classList.contains("fave")) {
-         e.currentTarget.classList.remove("fave");
+  // Audio Progress & Auto-Advance
+  audioEngine.addEventListener("loadedmetadata", () => {
+    endTimeEl.textContent = formatTime(audioEngine.duration);
+  });
+
+  audioEngine.addEventListener("timeupdate", () => {
+    if (!audioEngine.duration) return;
+    const pct = (audioEngine.currentTime / audioEngine.duration) * 100;
+    progressFill.style.width = `${pct}%`;
+    currentTimeEl.textContent = formatTime(audioEngine.currentTime);
+  });
+
+  audioEngine.addEventListener("ended", () => {
+    if (isRepeat) {
+      audioEngine.currentTime = 0;
+      audioEngine.play();
+    } else if (swiper) {
+      if (isShuffle && swiper.slides.length > 1) {
+        let rand;
+        do {
+          rand = Math.floor(Math.random() * swiper.slides.length);
+        } while (rand === swiper.activeIndex);
+        swiper.slideTo(rand);
+      } else if (swiper.activeIndex < swiper.slides.length - 1) {
+        swiper.slideNext();
       } else {
-         e.currentTarget.classList.add("fave");
+        swiper.slideTo(0);
       }
-   }
+    }
+  });
 
-   function openPlaylists(e) {
-      if (
-         e.currentTarget
-         .closest(".swiper-slide-active")
-         .classList.contains("open")
-      ) {
-         e.currentTarget
-            .closest(".swiper-slide-active")
-            .classList.remove("open");
-      } else {
-         e.currentTarget.closest(".swiper-slide-active").classList.add("open");
-      }
-   }
+  progressTrack.addEventListener("click", (e) => {
+    if (!audioEngine.duration) return;
+    const rect = progressTrack.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    audioEngine.currentTime = ratio * audioEngine.duration;
+  });
 
-   function closePlaylists() {
-      document.querySelector(".swiper-slide-active").classList.remove("open");
-   }
+  function formatTime(sec) {
+    if (isNaN(sec)) return "00:00";
+    const m = Math.floor(sec / 60).toString().padStart(2, "0");
+    const s = Math.floor(sec % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  }
 
-   function addPlaylist(e) {
-      if (e.currentTarget.classList.contains("selected")) {
-         e.currentTarget.classList.remove("selected");
-      } else {
-         e.currentTarget.classList.add("selected");
-      }
-   }
-
-   // Song Progress Bar
-
-   function formatTime(seconds) {
-      minutes = Math.floor(seconds / 60);
-      minutes = minutes >= 10 ? minutes : "0" + minutes;
-      seconds = Math.floor(seconds % 60);
-      seconds = seconds >= 10 ? seconds : "0" + seconds;
-      return minutes + ":" + seconds;
-   }
-
-   function progressBar() {
-      var songDuration = document.querySelector(".swiper-slide-active audio")
-      .duration,
-          endTime = document.querySelector(".endTime"),
-          songAudio = document.querySelector(".swiper-slide-active audio"),
-          currentTime = document.querySelector(".currentTime");
-
-      endTime.innerHTML = formatTime(songDuration);
-
-      songAudio.ontimeupdate = function() {
-         var progress = document.querySelector(".progress");
-         progress.style.width =
-            songAudio.currentTime * 100 / songDuration + "%";
-         currentTime.innerHTML = formatTime(songAudio.currentTime);
-      };
-   }
-
-   ////////////////
-   // Call Functions
-   ////////////////
-
-   changeBg();
-   progressBar();
-   changeBgColor();
-
-   wrapper.style.height = window.innerHeight + "px";
-
-   console.log(window.innerHeight);
+  // Initial Load & 10-Minute Background Polling
+  syncLibrary(true);
+  setInterval(() => syncLibrary(false), SYNC_INTERVAL_MS);
 });
