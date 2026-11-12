@@ -3,26 +3,44 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbzH2ScZCKVnHEHxbUb8np1o
 const SYNC_MS = 10 * 60 * 1000;
 
 const fileCache = new Map();
+const pendingCache = new Map();
 
-// Lädt Bilder und Audio über deine eingebaute action=media Funktion im Apps Script
+function base64ToBlobUrl(base64, mimeType) {
+  const byteChars = atob(base64);
+  const bytes = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) {
+    bytes[i] = byteChars.charCodeAt(i);
+  }
+  return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+}
+
 async function loadDriveFile(id) {
   if (!id) return '';
   if (fileCache.has(id)) return fileCache.get(id);
+  if (pendingCache.has(id)) return pendingCache.get(id);
 
-  try {
-    const res = await fetch(`${API_URL}?action=media&id=${encodeURIComponent(id)}`, { redirect: 'follow' });
-    const json = await res.json();
-    if (json.base64 && json.mimeType) {
-      const dataUrl = `data:${json.mimeType};base64,${json.base64}`;
-      fileCache.set(id, dataUrl);
-      return dataUrl;
+  const promise = (async () => {
+    try {
+      const res = await fetch(`${API_URL}?action=media&id=${encodeURIComponent(id)}`, { redirect: 'follow' });
+      const json = await res.json();
+      if (json.base64 && json.mimeType) {
+        const blobUrl = base64ToBlobUrl(json.base64, json.mimeType);
+        fileCache.set(id, blobUrl);
+        return blobUrl;
+      }
+      console.warn('Media-Fehler:', json.error);
+    } catch (e) {
+      console.error('Fetch-Fehler für Datei ' + id, e);
+    } finally {
+      pendingCache.delete(id);
     }
-    console.warn('Media-Fehler:', json.error);
-  } catch (e) {
-    console.error('Fetch-Fehler für Datei ' + id, e);
-  }
-  return '';
+    return '';
+  })();
+
+  pendingCache.set(id, promise);
+  return promise;
 }
+
 
 function hydrateImages(container = document) {
   container.querySelectorAll('img[data-drive-id]').forEach(async img => {
@@ -131,13 +149,22 @@ function renderTabs() {
     el.tabs.innerHTML = '<div class="empty">Keine Channels</div>';
     return;
   }
-  names.forEach(n => {
+    names.forEach(n => {
     const t = document.createElement('div');
     t.className = 'channel-tab' + (n === S.channel ? ' active' : '');
-    t.textContent = n;
+    
+    const chObj = S.data[n];
+    if (chObj && chObj.image) {
+      t.innerHTML = `<img class="channel-tab-logo" data-drive-id="${chObj.image}" alt="" style="height:20px; width:20px; object-fit:contain; vertical-align:middle; margin-right:6px; border-radius:4px;"><span>${n}</span>`;
+    } else {
+      t.textContent = n;
+    }
+
     t.onclick = () => selectChannel(n);
     el.tabs.appendChild(t);
   });
+  hydrateImages(el.tabs);
+
   if (!S.channel || !S.data[S.channel]) selectChannel(names[0]);
 }
 
@@ -161,10 +188,11 @@ function renderLeft() {
   }
   el.lH.textContent = 'Projekte';
 
-  if (ch.md || ch.qr) {
+    if (ch.md || ch.qr || ch.image) {
     el.lI.style.display = 'flex';
     el.lI.onclick = () => {
       let h = '';
+      if (ch.image) h += `<img data-drive-id="${ch.image}" alt="${ch.name}" style="max-height:120px; margin-bottom:12px;">`;
       if (ch.qr) h += `<img data-drive-id="${ch.qr}" alt="QR">`;
       if (ch.md) h += `<div class="md-body">${md(ch.md)}</div>`;
       modal(h || '<p class="empty">Keine Infos</p>');
@@ -172,6 +200,7 @@ function renderLeft() {
   } else {
     el.lI.style.display = 'none';
   }
+
 
   el.lB.innerHTML = '';
   if (!ch.projects || !ch.projects.length) {
@@ -307,6 +336,12 @@ async function play(i) {
   el.audio.play().catch(e => console.warn('Audio playback error:', e));
   S.playing = true;
   el.pPlay.textContent = '■';
+    // Nächsten Track leise im Hintergrund vorladen
+  const nextTrack = S.tracks[(i + 1) % S.tracks.length];
+  if (nextTrack && nextTrack.audioId && !fileCache.has(nextTrack.audioId)) {
+    setTimeout(() => loadDriveFile(nextTrack.audioId), 1500);
+  }
+
 }
 
 function togglePlay() {
