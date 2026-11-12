@@ -2,9 +2,36 @@
 const API_URL = 'https://script.google.com/macros/s/AKfycbzH2ScZCKVnHEHxbUb8np1ouILBmE-dhqMcqHnJOSiyyqjNdXD873tn2ZtaTqbj8F7N/exec';
 const SYNC_MS = 10 * 60 * 1000;
 
-// Separate URL builders for Google Drive images and audio
-const imgUrl = id => `https://google.com{id}&sz=w1000`;
-const audioUrl = id => `https://google.com{id}&export=download&confirm=t`;
+const fileCache = new Map();
+
+// Lädt Bilder und Audio über deine eingebaute action=media Funktion im Apps Script
+async function loadDriveFile(id) {
+  if (!id) return '';
+  if (fileCache.has(id)) return fileCache.get(id);
+
+  try {
+    const res = await fetch(`${API_URL}?action=media&id=${encodeURIComponent(id)}`, { redirect: 'follow' });
+    const json = await res.json();
+    if (json.base64 && json.mimeType) {
+      const dataUrl = `data:${json.mimeType};base64,${json.base64}`;
+      fileCache.set(id, dataUrl);
+      return dataUrl;
+    }
+    console.warn('Media-Fehler:', json.error);
+  } catch (e) {
+    console.error('Fetch-Fehler für Datei ' + id, e);
+  }
+  return '';
+}
+
+function hydrateImages(container = document) {
+  container.querySelectorAll('img[data-drive-id]').forEach(async img => {
+    const id = img.getAttribute('data-drive-id');
+    if (!id) return;
+    const url = await loadDriveFile(id);
+    if (url) img.src = url;
+  });
+}
 
 // ═══ STATE ═══
 let S = { data: {}, channel: null, project: null, tracks: [], idx: -1, playing: false, timer: null };
@@ -71,7 +98,7 @@ async function sync() {
     S.data = json.data;
     el.sync.textContent = new Date().toLocaleTimeString() + (json.fromCache ? ' (C)' : '');
     if (S.data.error) {
-      el.sync.textContent = 'Fehler';
+      el.sync.textContent = 'Fehler: ' + S.data.error;
       return;
     }
     renderTop();
@@ -87,11 +114,11 @@ function startSync() {
 }
 
 // ═══ RENDER: TOP ═══
-function renderTop() {
+async function renderTop() {
   const jb = S.data.__jukebox;
   if (jb && jb.image) {
-    el.jbLogo.src = imgUrl(jb.image);
     el.jbLogo.style.display = 'block';
+    el.jbLogo.src = await loadDriveFile(jb.image);
   } else {
     el.jbLogo.style.display = 'none';
   }
@@ -134,12 +161,11 @@ function renderLeft() {
   }
   el.lH.textContent = 'Projekte';
 
-  // Channel info
   if (ch.md || ch.qr) {
     el.lI.style.display = 'flex';
     el.lI.onclick = () => {
       let h = '';
-      if (ch.qr) h += `<img src="${imgUrl(ch.qr)}" alt="QR">`;
+      if (ch.qr) h += `<img data-drive-id="${ch.qr}" alt="QR">`;
       if (ch.md) h += `<div class="md-body">${md(ch.md)}</div>`;
       modal(h || '<p class="empty">Keine Infos</p>');
     };
@@ -159,21 +185,22 @@ function renderLeft() {
     const c = document.createElement('div');
     c.className = 'project-card' + (p.name === S.project ? ' active' : '');
     c.innerHTML =
-      (p.image ? `<img class="card-img" src="${imgUrl(p.image)}" alt="">` : '') +
+      (p.image ? `<img class="card-img" data-drive-id="${p.image}" alt="">` : '') +
       `<div class="card-info"><div class="card-name">${p.name}</div>` +
       `<div class="card-count">${p.tracks.length} Tracks</div></div>` +
-      (p.qr ? `<img class="card-qr" src="${imgUrl(p.qr)}" data-qr="${imgUrl(p.qr)}">` : '');
+      (p.qr ? `<img class="card-qr" data-drive-id="${p.qr}" data-qr-id="${p.qr}">` : '');
     c.onclick = () => selectProject(p);
     const q = c.querySelector('.card-qr');
     if (q) {
       q.onclick = e => {
         e.stopPropagation();
-        modal(`<img src="${q.dataset.qr}" alt="QR">`);
+        modal(`<img data-drive-id="${q.dataset.qrId}" alt="QR">`);
       };
     }
     g.appendChild(c);
   });
   el.lB.appendChild(g);
+  hydrateImages(el.lB);
 }
 
 // ═══ RENDER: RIGHT ═══
@@ -186,17 +213,16 @@ function selectProject(p) {
   renderRight();
 }
 
-function renderRight() {
+async function renderRight() {
   const ch = S.data[S.channel];
   const proj = ch?.projects?.find(p => p.name === S.project);
   el.rH.textContent = S.project || 'Tracks';
 
-  // Project info
   if (proj && (proj.md || proj.qr)) {
     el.rI.style.display = 'flex';
     el.rI.onclick = () => {
       let h = '';
-      if (proj.qr) h += `<img src="${imgUrl(proj.qr)}" alt="QR">`;
+      if (proj.qr) h += `<img data-drive-id="${proj.qr}" alt="QR">`;
       if (proj.md) h += `<div class="md-body">${md(proj.md)}</div>`;
       modal(h || '<p class="empty">Keine Infos</p>');
     };
@@ -204,10 +230,12 @@ function renderRight() {
     el.rI.style.display = 'none';
   }
 
-  // Banner
   if (proj && proj.image) {
     el.bA.style.display = 'block';
-    el.bI.src = imgUrl(proj.image);
+    el.bI.src = '';
+    loadDriveFile(proj.image).then(url => {
+      if (url) el.bI.src = url;
+    });
     if (proj.md) {
       el.bO.style.display = 'flex';
       el.bM.innerHTML = md(proj.md);
@@ -218,14 +246,13 @@ function renderRight() {
     el.bA.style.display = 'none';
   }
 
-  // Tracks
   el.tL.innerHTML = '';
   el.tE.style.display = S.tracks.length ? 'none' : 'block';
   S.tracks.forEach((t, i) => {
     const li = document.createElement('li');
     li.className = 'track-item' + (i === S.idx ? ' active' : '');
     li.innerHTML =
-      (t.image ? `<img class="track-thumb" src="${imgUrl(t.image)}" alt="">` : `<span class="track-num">${i + 1}</span>`) +
+      (t.image ? `<img class="track-thumb" data-drive-id="${t.image}" alt="">` : `<span class="track-num">${i + 1}</span>`) +
       `<div class="track-meta"><div class="track-name">${t.title}</div>` +
       `<div class="track-artist">${t.artist}</div></div>` +
       ((t.md || t.qr) ? '<button class="track-info-btn">i</button>' : '');
@@ -239,18 +266,20 @@ function renderRight() {
     }
     el.tL.appendChild(li);
   });
+  hydrateImages(el.tL);
 }
 
 // ═══ MODAL ═══
 function modal(html) {
   el.mC.innerHTML = html;
   el.mOv.classList.add('open');
+  hydrateImages(el.mC);
 }
 
 function trackInfo(i) {
   const t = S.tracks[i];
   let h = '';
-  if (t.qr) h += `<img src="${imgUrl(t.qr)}" alt="QR">`;
+  if (t.qr) h += `<img data-drive-id="${t.qr}" alt="QR">`;
   if (t.md) h += `<div class="md-body">${md(t.md)}</div>`;
   modal(h || '<p class="empty">Keine Infos</p>');
 }
@@ -261,23 +290,28 @@ el.mOv.onclick = e => {
 };
 
 // ═══ PLAYBACK ═══
-function play(i) {
+async function play(i) {
   if (i < 0 || i >= S.tracks.length) return;
   S.idx = i;
   const t = S.tracks[i];
-  el.audio.src = audioUrl(t.audioId);
-  el.pT.textContent = t.title;
+
+  el.pT.textContent = t.title + ' (Lädt...)';
   el.pA.textContent = t.artist;
+  renderRight();
+
+  const srcUrl = await loadDriveFile(t.audioId);
+  if (!srcUrl || S.idx !== i) return;
+
+  el.pT.textContent = t.title;
+  el.audio.src = srcUrl;
   el.audio.play().catch(e => console.warn('Audio playback error:', e));
   S.playing = true;
   el.pPlay.textContent = '■';
-  renderRight();
 }
 
 function togglePlay() {
   if (S.idx < 0) return;
   if (S.playing) {
-    // STOP: pause + reset
     el.audio.pause();
     el.audio.currentTime = 0;
     S.playing = false;
@@ -285,7 +319,6 @@ function togglePlay() {
     el.pTm.textContent = '0:00';
     el.pP.value = 0;
   } else {
-    // START: play
     el.audio.play().catch(e => console.warn('Audio playback error:', e));
     S.playing = true;
     el.pPlay.textContent = '■';
@@ -335,32 +368,27 @@ el.pRnd.onclick = random;
 el.audio.ontimeupdate = () => {
   if (el.audio.duration) {
     el.pTm.textContent = fmt(el.audio.currentTime);
-    el.pP.value = (el.audio.currentTime / el.audio.duration) * 100;
-  }
+el.pP.value = (el.audio.currentTime / el.audio.duration) * 100;
+}
 };
-
 el.audio.onloadedmetadata = () => {
-  el.pD.textContent = fmt(el.audio.duration);
+el.pD.textContent = fmt(el.audio.duration);
 };
-
 el.audio.onended = next;
-
 el.pP.oninput = () => {
-  if (el.audio.duration) el.audio.currentTime = (el.pP.value / 100) * el.audio.duration;
+if (el.audio.duration) el.audio.currentTime = (el.pP.value / 100) * el.audio.duration;
 };
-
 document.onkeydown = e => {
-  if (e.target.tagName === 'INPUT') return;
-  if (e.code === 'Space') {
-    e.preventDefault();
-    togglePlay();
-  }
-  if (e.code === 'ArrowLeft') prev();
-  if (e.code === 'ArrowRight') next();
-  if (e.code === 'KeyR') random();
-  if (e.code === 'Escape') el.mOv.classList.remove('open');
+if (e.target.tagName === 'INPUT') return;
+if (e.code === 'Space') {
+e.preventDefault();
+togglePlay();
+}
+if (e.code === 'ArrowLeft') prev();
+if (e.code === 'ArrowRight') next();
+if (e.code === 'KeyR') random();
+if (e.code === 'Escape') el.mOv.classList.remove('open');
 };
-
 // ═══ INIT ═══
 sync();
 startSync();
