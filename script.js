@@ -1,7 +1,7 @@
 // ============================================================================
 // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL BELOW:
 // ============================================================================
-const GOOGLE_SCRIPT_URL = "PASTE_YOUR_GOOGLE_APPS_SCRIPT_URL_HERE";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwshd4i2NH-wXN4nDksAEirmFyF8ywxf-gTu4JU5-Bz5deGuik4EwuZhih_R_VPQMZv0g/exec";
 
 const SYNC_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes silent background sync
 
