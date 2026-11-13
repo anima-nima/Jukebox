@@ -136,11 +136,7 @@ function md(s) {
 // ═══ SYNC ═══
 async function sync() {
   try {
-    const res = await fetch(`${API_URL}?action=sync`, {
-      method: 'GET',
-      redirect: 'follow'
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const res = await fetch(API_URL + '?action=sync', { redirect: 'follow' });
     const json = await res.json();
     S.data = json.data;
     el.sync.textContent = new Date().toLocaleTimeString() + (json.fromCache ? ' (C)' : '');
@@ -151,10 +147,10 @@ async function sync() {
     renderTop();
     renderTabs();
   } catch (e) {
-    console.error('Sync-Fehler:', e);
     el.sync.textContent = 'Fehler: ' + e.message;
   }
 }
+
 
 function startSync() {
   if (S.timer) clearInterval(S.timer);
@@ -188,6 +184,8 @@ function renderTabs() {
   });
   if (!S.channel || !S.data[S.channel]) {
     selectChannel(names[0]);
+
+    
   }
 }
 
