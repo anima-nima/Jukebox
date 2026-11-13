@@ -153,13 +153,24 @@ function selectChannel(name) {
   renderRight();
 }
 
+//function renderLeft() {
+  //const ch = S.data[S.channel];
+  i//f (!ch) {
+    //el.lB.innerHTML = '<div class="empty">–</div>';
+    //return;
+  //}
+  //el.lH.textContent = 'Projekte';
+// ═══ RENDER: LEFT ═══
 function renderLeft() {
   const ch = S.data[S.channel];
   if (!ch) {
     el.lB.innerHTML = '<div class="empty">–</div>';
     return;
   }
-  el.lH.textContent = 'Projekte';
+
+  // Nur bei "Hitproducer" steht "Projekte", bei allen anderen Channels "Themen"
+  el.lH.textContent = S.channel === 'Hitproducer' ? 'Projekte' : 'Themen';
+
 
   if (ch.md || ch.qr) {
     el.lI.style.display = 'flex';
