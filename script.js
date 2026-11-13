@@ -8,7 +8,10 @@ async function loadDriveFile(id) {
   if (!id) return '';
   if (fileCache.has(id)) return fileCache.get(id);
   try {
-    const res = await fetch(`${API_URL}?action=media&id=${encodeURIComponent(id)}`, { redirect: 'follow' });
+    const res = await fetch(`${API_URL}?action=media&id=${encodeURIComponent(id)}`, {
+      method: 'GET',
+      redirect: 'follow'
+    });
     const json = await res.json();
     if (json.base64 && json.mimeType) {
       const dataUrl = `data:${json.mimeType};base64,${json.base64}`;
@@ -127,14 +130,17 @@ function md(s) {
     .replace(/^/, '<p>')
     .replace(/$/, '</p>');
 
-  // Geschützte Bilder wieder einsetzen
   return text.replace(/%%%IMG_(\d+)%%%/g, (_, i) => imgs[i]);
 }
 
 // ═══ SYNC ═══
 async function sync() {
   try {
-    const res = await fetch(API_URL + '?action=sync', { redirect: 'follow' });
+    const res = await fetch(`${API_URL}?action=sync`, {
+      method: 'GET',
+      redirect: 'follow'
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
     S.data = json.data;
     el.sync.textContent = new Date().toLocaleTimeString() + (json.fromCache ? ' (C)' : '');
@@ -145,6 +151,7 @@ async function sync() {
     renderTop();
     renderTabs();
   } catch (e) {
+    console.error('Sync-Fehler:', e);
     el.sync.textContent = 'Fehler: ' + e.message;
   }
 }
@@ -179,7 +186,9 @@ function renderTabs() {
     t.onclick = () => selectChannel(n);
     el.tabs.appendChild(t);
   });
-  if (!S.channel || !S.data[S.channel]) selectChannel(names[0]);
+  if (!S.channel || !S.data[S.channel]) {
+    selectChannel(names[0]);
+  }
 }
 
 // ═══ RENDER: LEFT ═══
@@ -187,7 +196,6 @@ function selectChannel(name) {
   S.channel = name;
   S.project = null;
   S.tracks = [];
-  // Musik läuft beim Channel-Wechsel bewusst weiter (kein stop() und kein Reset von playQueue/idx)
   renderTabs();
   renderLeft();
   renderRight();
@@ -199,7 +207,6 @@ function renderLeft() {
     el.lB.innerHTML = '<div class="empty">–</div>';
     return;
   }
-  // Für kHaus "Themen" anzeigen, sonst "Projekte"
   el.lH.textContent = S.channel === 'kHaus' ? 'Themen' : 'Projekte';
 
   if (ch.md || ch.qr) {
@@ -247,7 +254,6 @@ function renderLeft() {
 function selectProject(p) {
   S.project = p.name;
   S.tracks = p.tracks || [];
-  // Musik läuft auch beim Projektwechsel weiter, bis ein neuer Track gestartet oder Stop geklickt wird
   renderLeft();
   renderRight();
 }
@@ -326,16 +332,16 @@ el.mOv.onclick = e => {
 };
 
 // ═══ PLAYBACK ═══
-// Startet einen Track aus der aktuell sichtbaren Liste und übernimmt diese als aktive Queue
 function playFromView(i) {
-if (i < 0 || i >= S.tracks.length) return;
-S.playQueue = [...S.tracks];
-play(i);
+  if (i < 0 || i >= S.tracks.length) return;
+  S.playQueue = [...S.tracks];
+  play(i);
 }
+
 async function play(i) {
-if (i < 0 || i >= S.playQueue.length) return;
-S.idx = i;
-const t = S.playQueue[i];
+  if (i < 0 || i >= S.playQueue.length) return;
+  S.idx = i;
+  const t = S.playQueue[i];
 S.activeTrackId = t.id;
 el.pT.textContent = t.title + ' (Lädt...)';
 el.pA.textContent = t.artist;
