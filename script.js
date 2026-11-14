@@ -1,16 +1,17 @@
 // ═══ CONFIG ═══
-const API_URL = 'https://script.google.com/macros/s/AKfycbzH2ScZCKVnHEHxbUb8np1ouILBmE-dhqMcqHnJOSiyyqjNdXD873tn2ZtaTqbj8F7N/exec';
+const API_URL = 'https://google.com';
 const SYNC_MS = 1 * 60 * 1000;
-
 const fileCache = new Map();
 
 // Lädt Bilder und Audio über deine eingebaute action=media Funktion im Apps Script
 async function loadDriveFile(id) {
   if (!id) return '';
   if (fileCache.has(id)) return fileCache.get(id);
-
   try {
-    const res = await fetch(`${API_URL}?action=media&id=${encodeURIComponent(id)}`, { redirect: 'follow' });
+    const res = await fetch(`${API_URL}?action=media&id=${encodeURIComponent(id)}`, {
+      method: 'GET',
+      redirect: 'follow'
+    });
     const json = await res.json();
     if (json.base64 && json.mimeType) {
       const dataUrl = `data:${json.mimeType};base64,${json.base64}`;
@@ -34,7 +35,17 @@ function hydrateImages(container = document) {
 }
 
 // ═══ STATE ═══
-let S = { data: {}, channel: null, project: null, tracks: [], idx: -1, playing: false, timer: null };
+let S = {
+  data: {},
+  channel: null,
+  project: null,
+  tracks: [],       // Aktuell angezeigte Trackliste
+  playQueue: [],    // Trackliste des aktuell laufenden Projekts
+  idx: -1,          // Index in der playQueue
+  activeTrackId: null,
+  playing: false,
+  timer: null
+};
 
 // ═══ DOM (einmalig) ═══
 const $ = id => document.getElementById(id);
@@ -72,7 +83,36 @@ const el = {
 // ═══ MARKDOWN ═══
 function md(s) {
   if (!s) return '';
-  return s
+
+  // 1. Referenz-Definitionen (z. B. [image1]: <data:image/png;base64,...>) extrahieren
+  const refs = {};
+  let text = s.replace(/^\[([^\]]+)\]:\s*<?([^>\s]+)>?\s*$/gm, (_, id, url) => {
+    refs[id.toLowerCase()] = url;
+    return '';
+  });
+
+  // 2. Google-Docs Escapes & geschützte Leerzeichen bereinigen
+  text = text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\\([\\`*_{}[\]()#+\-.!])/g, '$1');
+
+  // 3. Referenz-Bilder ![alt][id] und direkte Bilder ![alt](url) ersetzen
+  text = text.replace(/!\[([^\]]*)\]\[([^\]]+)\]/g, (_, alt, id) => {
+    const url = refs[id.toLowerCase()];
+    return url ? `<img src="${url}" alt="${alt}" style="max-width:100%;height:auto;">` : '';
+  });
+  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+    return `<img src="${url}" alt="${alt}" style="max-width:100%;height:auto;">`;
+  });
+
+  // 4. HTML escapen (bereits erzeugte <img>-Tags vorher schützen)
+  const imgs = [];
+  text = text.replace(/<img [^>]+>/g, match => {
+    imgs.push(match);
+    return `%%%IMG_${imgs.length - 1}%%%`;
+  });
+
+  text = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -84,10 +124,13 @@ function md(s) {
     .replace(/`(.+?)`/g, '<code>$1</code>')
     .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
     .replace(/^[-] (.+)$/gm, '<li>$1</li>')
+    .trim()
     .replace(/\n{2,}/g, '</p><p>')
     .replace(/\n/g, '<br>')
     .replace(/^/, '<p>')
     .replace(/$/, '</p>');
+
+  return text.replace(/%%%IMG_(\d+)%%%/g, (_, i) => imgs[i]);
 }
 
 // ═══ SYNC ═══
@@ -107,6 +150,7 @@ async function sync() {
     el.sync.textContent = 'Fehler: ' + e.message;
   }
 }
+
 
 function startSync() {
   if (S.timer) clearInterval(S.timer);
@@ -138,7 +182,11 @@ function renderTabs() {
     t.onclick = () => selectChannel(n);
     el.tabs.appendChild(t);
   });
-  if (!S.channel || !S.data[S.channel]) selectChannel(names[0]);
+  if (!S.channel || !S.data[S.channel]) {
+    selectChannel(names[0]);
+
+    
+  }
 }
 
 // ═══ RENDER: LEFT ═══
@@ -146,8 +194,6 @@ function selectChannel(name) {
   S.channel = name;
   S.project = null;
   S.tracks = [];
-  S.idx = -1;
-  stop();
   renderTabs();
   renderLeft();
   renderRight();
@@ -159,7 +205,7 @@ function renderLeft() {
     el.lB.innerHTML = '<div class="empty">–</div>';
     return;
   }
-  el.lH.textContent = 'Projekte';
+  el.lH.textContent = S.channel === 'kHaus' ? 'Themen' : 'Projekte';
 
   if (ch.md || ch.qr) {
     el.lI.style.display = 'flex';
@@ -172,20 +218,19 @@ function renderLeft() {
   } else {
     el.lI.style.display = 'none';
   }
-
   el.lB.innerHTML = '';
   if (!ch.projects || !ch.projects.length) {
-    el.lB.innerHTML = '<div class="empty">Keine Projekte</div>';
+    el.lB.innerHTML = S.channel === 'kHaus'
+      ? '<div class="empty">Keine Themen</div>'
+      : '<div class="empty">Keine Projekte</div>';
     return;
   }
-
   const g = document.createElement('div');
   g.className = 'project-grid';
   ch.projects.forEach(p => {
     const c = document.createElement('div');
     c.className = 'project-card' + (p.name === S.project ? ' active' : '');
-    c.innerHTML =
-      (p.image ? `<img class="card-img" data-drive-id="${p.image}" alt="">` : '') +
+    c.innerHTML = (p.image ? `<img class="card-img" data-drive-id="${p.image}" alt="">` : '') +
       `<div class="card-info"><div class="card-name">${p.name}</div>` +
       `<div class="card-count">${p.tracks.length} Tracks</div></div>` +
       (p.qr ? `<img class="card-qr" data-drive-id="${p.qr}" data-qr-id="${p.qr}">` : '');
@@ -207,8 +252,6 @@ function renderLeft() {
 function selectProject(p) {
   S.project = p.name;
   S.tracks = p.tracks || [];
-  S.idx = -1;
-  stop();
   renderLeft();
   renderRight();
 }
@@ -217,7 +260,6 @@ async function renderRight() {
   const ch = S.data[S.channel];
   const proj = ch?.projects?.find(p => p.name === S.project);
   el.rH.textContent = S.project || 'Tracks';
-
   if (proj && (proj.md || proj.qr)) {
     el.rI.style.display = 'flex';
     el.rI.onclick = () => {
@@ -229,7 +271,6 @@ async function renderRight() {
   } else {
     el.rI.style.display = 'none';
   }
-
   if (proj && proj.image) {
     el.bA.style.display = 'block';
     el.bI.src = '';
@@ -245,18 +286,17 @@ async function renderRight() {
   } else {
     el.bA.style.display = 'none';
   }
-
   el.tL.innerHTML = '';
   el.tE.style.display = S.tracks.length ? 'none' : 'block';
   S.tracks.forEach((t, i) => {
     const li = document.createElement('li');
-    li.className = 'track-item' + (i === S.idx ? ' active' : '');
-    li.innerHTML =
-      (t.image ? `<img class="track-thumb" data-drive-id="${t.image}" alt="">` : `<span class="track-num">${i + 1}</span>`) +
+    const isCurrentTrack = S.activeTrackId && t.id === S.activeTrackId;
+    li.className = 'track-item' + (isCurrentTrack ? ' active' : '');
+    li.innerHTML = (t.image ? `<img class="track-thumb" data-drive-id="${t.image}" alt="">` : `<span class="track-num">${i + 1}</span>`) +
       `<div class="track-meta"><div class="track-name">${t.title}</div>` +
       `<div class="track-artist">${t.artist}</div></div>` +
       ((t.md || t.qr) ? '<button class="track-info-btn">i</button>' : '');
-    li.onclick = () => play(i);
+    li.onclick = () => playFromView(i);
     const ib = li.querySelector('.track-info-btn');
     if (ib) {
       ib.onclick = e => {
@@ -290,84 +330,75 @@ el.mOv.onclick = e => {
 };
 
 // ═══ PLAYBACK ═══
-async function play(i) {
+function playFromView(i) {
   if (i < 0 || i >= S.tracks.length) return;
-  S.idx = i;
-  const t = S.tracks[i];
-
-  el.pT.textContent = t.title + ' (Lädt...)';
-  el.pA.textContent = t.artist;
-  renderRight();
-
-  const srcUrl = await loadDriveFile(t.audioId);
-  if (!srcUrl || S.idx !== i) return;
-
-  el.pT.textContent = t.title;
-  el.audio.src = srcUrl;
-  el.audio.play().catch(e => console.warn('Audio playback error:', e));
-  S.playing = true;
-  el.pPlay.textContent = '■';
-}
-
-function togglePlay() {
-  if (S.idx < 0) return;
-  if (S.playing) {
-    el.audio.pause();
-    el.audio.currentTime = 0;
-    S.playing = false;
-    el.pPlay.textContent = '▶';
-    el.pTm.textContent = '0:00';
-    el.pP.value = 0;
-  } else {
-    el.audio.play().catch(e => console.warn('Audio playback error:', e));
-    S.playing = true;
-    el.pPlay.textContent = '■';
-  }
-}
-
-function stop() {
-  el.audio.pause();
-  el.audio.currentTime = 0;
-  S.playing = false;
-  el.pPlay.textContent = '▶';
-  el.pTm.textContent = '0:00';
-  el.pP.value = 0;
-}
-
-function prev() {
-  if (!S.tracks.length) return;
-  play((S.idx - 1 + S.tracks.length) % S.tracks.length);
-}
-
-function next() {
-  if (!S.tracks.length) return;
-  play((S.idx + 1) % S.tracks.length);
-}
-
-function random() {
-  if (!S.tracks.length) return;
-  let i;
-  do {
-    i = Math.floor(Math.random() * S.tracks.length);
-  } while (i === S.idx && S.tracks.length > 1);
+  S.playQueue = [...S.tracks];
   play(i);
 }
 
+async function play(i) {
+  if (i < 0 || i >= S.playQueue.length) return;
+  S.idx = i;
+  const t = S.playQueue[i];
+S.activeTrackId = t.id;
+el.pT.textContent = t.title + ' (Lädt...)';
+el.pA.textContent = t.artist;
+renderRight();
+const srcUrl = await loadDriveFile(t.audioId);
+if (!srcUrl || S.idx !== i || S.activeTrackId !== t.id) return;
+el.pT.textContent = t.title;
+el.audio.src = srcUrl;
+el.audio.play().catch(e => console.warn('Audio playback error:', e));
+S.playing = true;
+el.pPlay.textContent = '■';
+}
+function togglePlay() {
+if (S.idx < 0 || !S.playQueue.length) return;
+if (S.playing) {
+stop();
+} else {
+el.audio.play().catch(e => console.warn('Audio playback error:', e));
+S.playing = true;
+el.pPlay.textContent = '■';
+}
+}
+function stop() {
+el.audio.pause();
+el.audio.currentTime = 0;
+S.playing = false;
+el.pPlay.textContent = '▶';
+el.pTm.textContent = '0:00';
+el.pP.value = 0;
+}
+function prev() {
+if (!S.playQueue.length) return;
+play((S.idx - 1 + S.playQueue.length) % S.playQueue.length);
+}
+function next() {
+if (!S.playQueue.length) return;
+play((S.idx + 1) % S.playQueue.length);
+}
+function random() {
+if (!S.playQueue.length) return;
+let i;
+do {
+i = Math.floor(Math.random() * S.playQueue.length);
+} while (i === S.idx && S.playQueue.length > 1);
+play(i);
+}
 // ═══ HELPERS ═══
 function fmt(s) {
-  if (!isFinite(s)) return '0:00';
-  return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+if (!isFinite(s)) return '0:00';
+return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 }
-
 // ═══ EVENTS ═══
 el.pPlay.onclick = togglePlay;
 el.pPrev.onclick = prev;
 el.pNext.onclick = next;
 el.pRnd.onclick = random;
-
 el.audio.ontimeupdate = () => {
-  if (el.audio.duration) {
-    el.pTm.textContent = fmt(el.audio.currentTime);
+if (el.audio.duration) {
+el.pTm.textContent = fmt(el.audio.currentTime);
 el.pP.value = (el.audio.currentTime / el.audio.duration) * 100;
 }
 };
