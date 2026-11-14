@@ -13,7 +13,7 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-seri
 .channel-tab-logo{width:20px;height:20px;object-fit:contain;border-radius:4px;flex-shrink:0}
 .sync-badge{font-size:.6rem;color:#555;white-space:nowrap}
 
-/* ── MIDDLE: 30/70 ── */
+/* ── MIDDLE ── */
 .middle{display:grid;grid-template-columns:30% 1fr;gap:8px;min-height:0;overflow:hidden}
 
 .panel{background:#1a1a2e;border-radius:12px;display:flex;flex-direction:column;overflow:hidden;min-height:0}
@@ -23,7 +23,7 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-seri
 .info-btn:hover{background:#6c63ff33;color:#a78bfa}
 .panel-body{flex:1;overflow-y:auto;padding:0 8px 8px;min-height:0}
 
-/* ── AKKORDEON (links) ── */
+/* ── AKKORDEON ── */
 .accordion{display:flex;flex-direction:column;gap:4px}
 .accordion-item{border-radius:8px;overflow:hidden;border:2px solid transparent;transition:border-color .2s}
 .accordion-item.open{border-color:#6c63ff44}
@@ -40,7 +40,7 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-seri
 .accordion-body{max-height:0;overflow:hidden;transition:max-height .3s ease;background:#16162a}
 .accordion-item.open .accordion-body{max-height:600px}
 
-/* ── TRACKS (im Akkordeon) ── */
+/* ── TRACKS ── */
 .track-list{list-style:none;padding:4px 6px}
 .track-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .15s;font-size:.75rem}
 .track-item:hover{background:#2a2a4a}
@@ -56,15 +56,106 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-seri
 .track-info-btn:hover{background:#6c63ff33;color:#a78bfa}
 
 /* ── KONTEXT-ANZEIGE (rechts) ── */
-.context-display{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;padding:20px;overflow-y:auto}
-.context-img{max-width:100%;max-height:45vh;object-fit:contain;border-radius:10px;background:#2a2a4a}
-.context-logo{max-width:160px;max-height:120px;object-fit:contain;opacity:.5;border-radius:8px}
-.context-md{font-size:.82rem;color:#bbb;text-align:center;line-height:1.5;max-width:90%}
-.context-md h1,.context-md h2,.context-md h3{font-size:.9rem;color:#a78bfa;margin:8px 0 4px}
-.context-md p{margin:4px 0}
-.context-md img{max-width:100%;height:auto;border-radius:8px;margin:8px 0}
+.context-display{
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  padding:0;
+  position:relative;
+}
 
-/* ── MARKDOWN BILDER ── */
+/* Bild-Bereich oben */
+.context-image-wrap{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  transition:flex-basis .4s ease, opacity .4s ease, padding .4s ease;
+  overflow:hidden;
+}
+.context-image-wrap.shrunk{
+  flex-basis:60px;
+  opacity:.4;
+  padding:8px;
+}
+.context-img{
+  max-width:100%;
+  max-height:200px;
+  object-fit:contain;
+  border-radius:10px;
+  background:#2a2a4a;
+  transition:max-height .4s ease, transform .4s ease;
+}
+.context-image-wrap.shrunk .context-img{
+  max-height:50px;
+  transform:scale(.8);
+}
+.context-logo{
+  max-width:140px;
+  max-height:100px;
+  object-fit:contain;
+  opacity:.5;
+  border-radius:8px;
+  transition:max-height .4s ease, transform .4s ease;
+}
+.context-image-wrap.shrunk .context-logo{
+  max-height:40px;
+  transform:scale(.7);
+}
+
+/* Text-Bereich unten mit Fade-Masken */
+.context-text-wrap{
+  flex:1;
+  position:relative;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+}
+.context-text{
+  flex:1;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding:12px 16px 24px;
+  font-size:.82rem;
+  line-height:1.6;
+  color:#bbb;
+  scrollbar-width:none;
+  -ms-overflow-style:none;
+}
+.context-text::-webkit-scrollbar{display:none}
+
+/* Fade-Masken oben/unten */
+.context-fade-top,.context-fade-bottom{
+  position:absolute;
+  left:0;right:0;
+  height:32px;
+  pointer-events:none;
+  z-index:2;
+  opacity:0;
+  transition:opacity .3s;
+}
+.context-fade-top{
+  top:0;
+  background:linear-gradient(to bottom, #1a1a2e 0%, transparent 100%);
+}
+.context-fade-bottom{
+  bottom:0;
+  background:linear-gradient(to top, #1a1a2e 0%, transparent 100%);
+}
+.context-fade-top.visible,.context-fade-bottom.visible{
+  opacity:1;
+}
+
+/* Markdown im Kontext */
+.context-text h1,.context-text h2,.context-text h3{font-size:.9rem;color:#a78bfa;margin:10px 0 4px}
+.context-text p{margin:4px 0;word-wrap:break-word;overflow-wrap:break-word}
+.context-text ul,.context-text ol{padding-left:18px;margin:4px 0}
+.context-text code{background:#2a2a4a;padding:1px 5px;border-radius:3px;font-size:.78rem}
+.context-text blockquote{border-left:3px solid #6c63ff;padding-left:10px;color:#999;margin:6px 0}
+.context-text img,.md-img{max-width:100%;height:auto;border-radius:8px;margin:8px 0;display:block}
+
+/* ── MARKDOWN BILDER (global) ── */
 .md-body img,.md-img{max-width:100%;height:auto;border-radius:6px;margin:6px 0;display:block}
 
 /* ── PLAYER ── */
@@ -106,5 +197,5 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-seri
   .app{padding:8px;gap:6px}
   .channel-tab{padding:8px 8px;font-size:.78rem}
   .channel-tab-logo{width:16px;height:16px}
-  .context-img{max-height:30vh}
+  .context-img{max-height:140px}
 }
