@@ -32,7 +32,10 @@ function hydrateImages(container = document) {
 }
 
 // ═══ STATE ═══
-let S = { data: {}, channel: null, project: null, tracks: [], idx: -1, playing: false, timer: null };
+// S = was gerade ANGEZEIGT wird
+let S = { data: {}, channel: null, project: null, tracks: [], idx: -1, timer: null };
+// P = was gerade SPIELT (unabhängig von der Anzeige)
+let P = { channel: null, project: null, tracks: [], idx: -1, playing: false };
 
 // ═══ DOM ═══
 const $ = id => document.getElementById(id);
@@ -377,11 +380,17 @@ el.mOv.onclick = e => {
   if (e.target === el.mOv) el.mOv.classList.remove('open');
 };
 
-// ═══ PLAYBACK ═══
+// ═══ PLAYBACK (nutzt P, nicht S) ═══
 async function play(i) {
   if (i < 0 || i >= S.tracks.length) return;
   S.idx = i;
   const t = S.tracks[i];
+
+  // Playback-State spiegeln
+  P.channel = S.channel;
+  P.project = S.project;
+  P.tracks = S.tracks;
+  P.idx = i;
 
   el.pT.textContent = t.title + ' (Lädt...)';
   el.pA.textContent = t.artist;
@@ -389,25 +398,25 @@ async function play(i) {
   renderRight();
 
   const srcUrl = await loadDriveFile(t.audioId);
-  if (!srcUrl || S.idx !== i) return;
+  if (!srcUrl || P.idx !== i) return;
 
   el.pT.textContent = t.title;
   el.audio.src = srcUrl;
   el.audio.currentTime = 0;
   el.audio.play().catch(e => console.warn('Audio playback error:', e));
-  S.playing = true;
+  P.playing = true;
   el.pPlay.textContent = '■';
 }
 
 function togglePlay() {
-  if (S.idx < 0) return;
-  if (S.playing) {
+  if (P.idx < 0) return;
+  if (P.playing) {
     el.audio.pause();
-    S.playing = false;
+    P.playing = false;
     el.pPlay.textContent = '▶';
   } else {
     el.audio.play().catch(e => console.warn('Audio playback error:', e));
-    S.playing = true;
+    P.playing = true;
     el.pPlay.textContent = '■';
   }
 }
@@ -415,35 +424,72 @@ function togglePlay() {
 function stop() {
   el.audio.pause();
   el.audio.currentTime = 0;
-  S.playing = false;
+  P.playing = false;
+  P.idx = -1;
   el.pPlay.textContent = '▶';
   el.pTm.textContent = '0:00';
   el.pP.value = 0;
+  el.pT.textContent = '–';
+  el.pA.textContent = '–';
+}
+
+// Wechselt bei Bedarf zurück zum Channel, der gerade spielt
+function syncViewToPlayback() {
+  if (P.channel && P.channel !== S.channel) {
+    S.channel = P.channel;
+    S.project = P.project;
+    S.tracks = P.tracks;
+    S.idx = P.idx;
+    renderTabs();
+    renderLeft();
+    renderRight();
+  }
 }
 
 function prev() {
-  if (!S.tracks.length) return;
-  play((S.idx - 1 + S.tracks.length) % S.tracks.length);
+  if (!P.tracks.length) return;
+  syncViewToPlayback();
+  const newIdx = (P.idx - 1 + P.tracks.length) % P.tracks.length;
+  S.idx = newIdx;
+  playTrack(P.tracks[newIdx], newIdx);
 }
 
 function next() {
-  if (!S.tracks.length) return;
-  play((S.idx + 1) % S.tracks.length);
+  if (!P.tracks.length) return;
+  syncViewToPlayback();
+  const newIdx = (P.idx + 1) % P.tracks.length;
+  S.idx = newIdx;
+  playTrack(P.tracks[newIdx], newIdx);
 }
 
 function random() {
-  if (!S.tracks.length) return;
+  if (!P.tracks.length) return;
+  syncViewToPlayback();
   let i;
   do {
-    i = Math.floor(Math.random() * S.tracks.length);
-  } while (i === S.idx && S.tracks.length > 1);
-  play(i);
+    i = Math.floor(Math.random() * P.tracks.length);
+  } while (i === P.idx && P.tracks.length > 1);
+  S.idx = i;
+  playTrack(P.tracks[i], i);
 }
 
-// ═══ HELPERS ═══
-function fmt(s) {
-  if (!isFinite(s)) return '0:00';
-  return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+// Gemeinsame Kernfunktion für prev/next/random
+async function playTrack(t, idx) {
+  P.idx = idx;
+  el.pT.textContent = t.title + ' (Lädt...)';
+  el.pA.textContent = t.artist;
+  renderLeft();
+  renderRight();
+
+  const srcUrl = await loadDriveFile(t.audioId);
+  if (!srcUrl) return;
+
+  el.pT.textContent = t.title;
+  el.audio.src = srcUrl;
+  el.audio.currentTime = 0;
+  el.audio.play().catch(e => console.warn('Audio playback error:', e));
+  P.playing = true;
+  el.pPlay.textContent = '■';
 }
 
 // ═══ EVENTS ═══
