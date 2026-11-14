@@ -7,9 +7,10 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-seri
 .top-bar{display:flex;align-items:center;gap:10px}
 .jb-logo{width:34px;height:34px;border-radius:8px;object-fit:cover;background:#2a2a4a;flex-shrink:0}
 .channel-tabs{display:flex;gap:6px;flex:1}
-.channel-tab{flex:1;padding:10px 14px;text-align:center;border-radius:8px;background:#1a1a2e;border:2px solid transparent;cursor:pointer;font-weight:600;font-size:.88rem;transition:all .2s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.channel-tab{flex:1;padding:10px 14px;text-align:center;border-radius:8px;background:#1a1a2e;border:2px solid transparent;cursor:pointer;font-weight:600;font-size:.88rem;transition:all .2s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;justify-content:center;gap:6px}
 .channel-tab:hover{border-color:#6c63ff44}
 .channel-tab.active{border-color:#6c63ff;background:#1e1e3a;color:#a78bfa}
+.channel-tab-logo{width:20px;height:20px;object-fit:contain;border-radius:4px;flex-shrink:0}
 .sync-badge{font-size:.6rem;color:#555;white-space:nowrap}
 
 /* ── MIDDLE: 30/70 ── */
@@ -39,8 +40,11 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-seri
 .banner-overlay{position:absolute;inset:0;background:rgba(15,15,26,.88);padding:12px 14px;overflow-y:auto;display:flex;align-items:center}
 .banner-overlay .md-body{font-size:.78rem;line-height:1.5;color:#ccc}
 
-/* ── TRACKS (right) ── */
-.track-list{list-style:none}
+/* ── RECHTES PANEL: SPLIT-Layout ── */
+.panel-right .panel-body{display:flex;flex-direction:column;overflow:hidden;padding:0 8px 8px}
+
+/* ── TRACKS (rechte obere Hälfte, scrollbar) ── */
+.track-list{list-style:none;flex:1 1 55%;overflow-y:auto;min-height:0}
 .track-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;cursor:pointer;transition:background .15s;font-size:.8rem}
 .track-item:hover{background:#2a2a4a}
 .track-item.active{background:#6c63ff18}
@@ -53,6 +57,18 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-seri
 .track-artist{font-size:.66rem;color:#666}
 .track-info-btn{width:20px;height:20px;border-radius:4px;border:none;background:#2a2a4a;color:#888;cursor:pointer;font-size:.6rem;font-weight:700;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .track-info-btn:hover{background:#6c63ff33;color:#a78bfa}
+
+/* ── CONTEXT PANEL (rechte untere Hälfte) ── */
+.context-panel{flex:0 0 45%;display:flex;flex-direction:column;align-items:center;justify-content:center;border-top:1px solid #2a2a4a;padding:12px 8px;overflow-y:auto;gap:8px;min-height:0}
+.context-img{max-width:100%;max-height:120px;object-fit:contain;border-radius:8px;background:#2a2a4a}
+.context-logo{max-width:100px;max-height:70px;object-fit:contain;opacity:.6;border-radius:6px}
+.context-md{font-size:.72rem;color:#999;text-align:center;line-height:1.4;max-height:80px;overflow-y:auto;width:100%}
+.context-md h1,.context-md h2,.context-md h3{font-size:.8rem;color:#a78bfa;margin:4px 0 2px}
+.context-md p{margin:2px 0}
+.context-md img{max-width:100%;height:auto;border-radius:6px;margin:4px 0}
+
+/* ── MARKDOWN BILDER ── */
+.md-body img,.md-img{max-width:100%;height:auto;border-radius:6px;margin:6px 0;display:block}
 
 /* ── PLAYER ── */
 .player-bar{background:#1a1a2e;border-radius:12px;padding:10px 14px;display:flex;align-items:center;gap:12px}
@@ -93,4 +109,8 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-seri
   .panel-left{max-height:35%}
   .app{padding:8px;gap:6px}
   .banner-img{height:90px}
+  .context-panel{flex:0 0 35%}
+  .context-img{max-height:80px}
+  .channel-tab{padding:8px 8px;font-size:.78rem}
+  .channel-tab-logo{width:16px;height:16px}
 }
