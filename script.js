@@ -240,7 +240,7 @@ function renderLeft() {
         (t.image ? `<img class="track-thumb" data-drive-id="${t.image}" alt="">` : `<span class="track-num">${ti + 1}</span>`) +
         `<div class="track-meta"><div class="track-name">${t.title}</div>` +
         `<div class="track-artist">${t.artist}</div></div>` +
-        ((t.md || t.qr) ? '<button class="track-info-btn">i</button>' : '');
+        ((t.infoMd || t.infoQr) ? '<button class="track-info-btn">i</button>' : '');
       li.onclick = () => {
         S.project = p.name;
         S.tracks = p.tracks || [];
@@ -367,8 +367,8 @@ function modal(html) {
 
 function trackInfo(t) {
   let h = '';
-  if (t.qr) h += `<img data-drive-id="${t.qr}" alt="QR">`;
-  if (t.md) h += `<div class="md-body">${md(t.md)}</div>`;
+  if (t.infoQr) h += `<img data-drive-id="${t.infoQr}" alt="QR">`;
+  if (t.infoMd) h += `<div class="md-body">${md(t.infoMd)}</div>`;
   modal(h || '<p class="empty">Keine Infos</p>');
 }
 
