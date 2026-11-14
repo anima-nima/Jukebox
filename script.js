@@ -44,8 +44,6 @@ const el = {
   lB: $('leftBody'),
   lI: $('leftInfoBtn'),
   rH: $('rightHeader'),
-  rB: $('rightBody'),
-  rI: $('rightInfoBtn'),
   pT: $('pbTitle'),
   pA: $('pbArtist'),
   pTm: $('pbTime'),
@@ -59,21 +57,24 @@ const el = {
   mOv: $('modalOverlay'),
   mC: $('modalContent'),
   mX: $('modalClose'),
+  contextImageWrap: $('contextImageWrap'),
   contextImg: $('contextImg'),
-  contextMd: $('contextMd'),
-  contextLogo: $('contextLogo')
+  contextLogo: $('contextLogo'),
+  contextText: $('contextText'),
+  fadeTop: $('fadeTop'),
+  fadeBottom: $('fadeBottom')
 };
 
-// ═══ MARKDOWN (mit Bild-Support) ═══
+// ═══ MARKDOWN (mit Drive-ID-Bildern) ═══
 function md(s) {
   if (!s) return '';
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    // Drive-IDs (lange alphanumerische Strings): ![alt](ID) → <img data-drive-id>
+    // Drive-IDs (20+ Zeichen alphanumerisch): ![alt](ID) → data-drive-id
     .replace(/!\[([^\]]*)\]\(([a-zA-Z0-9_-]{20,})\)/g, '<img data-drive-id="\$2" alt="\$1" class="md-img">')
-    // Normale URLs: ![alt](https://...) → <img src>
+    // Normale URLs: ![alt](https://...) → src
     .replace(/!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g, '<img src="\$2" alt="\$1" class="md-img">')
     .replace(/^### (.+)$/gm, '<h3>\$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>\$1</h2>')
@@ -136,8 +137,8 @@ async function renderTabs() {
     t.className = 'channel-tab' + (n === S.channel ? ' active' : '');
 
     const ch = S.data[n];
-    if (ch && ch.logo) {
-      const logoUrl = await loadDriveFile(ch.logo);
+    if (ch && ch.image) {
+      const logoUrl = await loadDriveFile(ch.image);
       if (logoUrl) {
         const logoImg = document.createElement('img');
         logoImg.src = logoUrl;
@@ -174,7 +175,6 @@ function renderLeft() {
     return;
   }
 
-  // Tab-Titel: "Projekte" bei Hitproducer, "Themen" bei allen anderen
   el.lH.textContent = S.channel === 'Hitproducer' ? 'Projekte' : 'Themen';
 
   if (ch.md || ch.qr) {
@@ -204,7 +204,6 @@ function renderLeft() {
     const item = document.createElement('div');
     item.className = 'accordion-item' + (isOpen ? ' open' : '');
 
-    // Header
     const header = document.createElement('div');
     header.className = 'accordion-header';
     header.innerHTML =
@@ -218,7 +217,6 @@ function renderLeft() {
       toggleAccordion(p);
     };
 
-    // QR-Button
     const qr = header.querySelector('.accordion-qr');
     if (qr) {
       qr.onclick = e => {
@@ -229,7 +227,6 @@ function renderLeft() {
 
     item.appendChild(header);
 
-    // Body mit Tracks
     const body = document.createElement('div');
     body.className = 'accordion-body';
     const ul = document.createElement('ul');
@@ -237,8 +234,8 @@ function renderLeft() {
 
     (p.tracks || []).forEach((t, ti) => {
       const li = document.createElement('li');
-      const globalIdx = S.tracks.indexOf(t);
-      li.className = 'track-item' + (globalIdx >= 0 && globalIdx === S.idx ? ' active' : '');
+      const isActive = S.project === p.name && S.tracks.indexOf(t) === S.idx;
+      li.className = 'track-item' + (isActive ? ' active' : '');
       li.innerHTML =
         (t.image ? `<img class="track-thumb" data-drive-id="$${t.image}" alt="">` : `<span class="track-num">$${ti + 1}</span>`) +
         `<div class="track-meta"><div class="track-name">${t.title}</div>` +
@@ -270,12 +267,10 @@ function renderLeft() {
 
 function toggleAccordion(p) {
   if (S.project === p.name) {
-    // Zuklappen
     S.project = null;
     S.tracks = [];
     S.idx = -1;
   } else {
-    // Aufklappen
     S.project = p.name;
     S.tracks = p.tracks || [];
     S.idx = -1;
@@ -284,12 +279,16 @@ function toggleAccordion(p) {
   renderRight();
 }
 
-// ═══ RENDER: RIGHT (nur Bild + Text) ═══
+// ═══ RENDER: RIGHT (Bild + Text mit Scroll-Effekt) ═══
 async function renderRight() {
   const ch = S.data[S.channel];
   const proj = ch?.projects?.find(p => p.name === S.project);
 
-  // Priorität: Aktiver Track → Projekt → Channel-Logo
+  // Reset scroll state
+  el.contextText.scrollTop = 0;
+  el.contextImageWrap.classList.remove('shrunk');
+  updateFades();
+
   if (S.idx >= 0 && S.tracks[S.idx]) {
     const t = S.tracks[S.idx];
     el.rH.textContent = t.title;
@@ -302,35 +301,55 @@ async function renderRight() {
     } else {
       el.contextImg.style.display = 'none';
     }
-    el.contextMd.innerHTML = t.md ? md(t.md) : '';
-  } else if (proj && proj.image) {
+    el.contextText.innerHTML = t.md ? md(t.md) : '';
+  } else if (proj) {
     el.rH.textContent = proj.name;
     el.contextLogo.style.display = 'none';
-    el.contextImg.style.display = 'block';
-    el.contextImg.src = '';
-    const url = await loadDriveFile(proj.image);
-    if (url) el.contextImg.src = url;
-    el.contextMd.innerHTML = proj.md ? md(proj.md) : '';
-  } else if (proj && proj.md) {
-    el.rH.textContent = proj.name;
-    el.contextImg.style.display = 'none';
-    el.contextLogo.style.display = 'none';
-    el.contextMd.innerHTML = md(proj.md);
-  } else if (ch && ch.logo) {
+    if (proj.image) {
+      el.contextImg.style.display = 'block';
+      el.contextImg.src = '';
+      const url = await loadDriveFile(proj.image);
+      if (url) el.contextImg.src = url;
+    } else {
+      el.contextImg.style.display = 'none';
+    }
+    el.contextText.innerHTML = proj.md ? md(proj.md) : '';
+  } else if (ch && ch.image) {
     el.rH.textContent = S.channel || 'Info';
     el.contextImg.style.display = 'none';
-    el.contextMd.innerHTML = ch.md ? md(ch.md) : '';
+    el.contextText.innerHTML = ch.md ? md(ch.md) : '';
     el.contextLogo.style.display = 'block';
     el.contextLogo.src = '';
-    const url = await loadDriveFile(ch.logo);
+    const url = await loadDriveFile(ch.image);
     if (url) el.contextLogo.src = url;
   } else {
     el.rH.textContent = 'Info';
     el.contextImg.style.display = 'none';
     el.contextLogo.style.display = 'none';
-    el.contextMd.innerHTML = '<p class="empty">Keine Auswahl</p>';
+    el.contextText.innerHTML = '<p class="empty">Keine Auswahl</p>';
   }
+
+  hydrateImages(el.contextText);
+  updateFades();
 }
+
+// ═══ SCROLL-VERHALTEN: Bild schrumpft, Fades erscheinen ═══
+function updateFades() {
+  const el2 = el.contextText;
+  const hasScroll = el2.scrollHeight > el2.clientHeight;
+  const atTop = el2.scrollTop <= 4;
+  const atBottom = el2.scrollTop + el2.clientHeight >= el2.scrollHeight - 4;
+
+  el.fadeTop.classList.toggle('visible', hasScroll && !atTop);
+  el.fadeBottom.classList.toggle('visible', hasScroll && !atBottom);
+}
+
+el.contextText.addEventListener('scroll', () => {
+  updateFades();
+  // Bild schrumpft ab 40px Scroll
+  const shrunk = el.contextText.scrollTop > 40;
+  el.contextImageWrap.classList.toggle('shrunk', shrunk);
+});
 
 // ═══ MODAL ═══
 function modal(html) {
