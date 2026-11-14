@@ -34,7 +34,7 @@ function hydrateImages(container = document) {
 // ═══ STATE ═══
 let S = { data: {}, channel: null, project: null, tracks: [], idx: -1, playing: false, timer: null };
 
-// ═══ DOM (einmalig) ═══
+// ═══ DOM ═══
 const $ = id => document.getElementById(id);
 const el = {
   jbLogo: $('jbLogo'),
@@ -46,12 +46,6 @@ const el = {
   rH: $('rightHeader'),
   rB: $('rightBody'),
   rI: $('rightInfoBtn'),
-  bA: $('bannerArea'),
-  bI: $('bannerImg'),
-  bO: $('bannerOverlay'),
-  bM: $('bannerMd'),
-  tL: $('trackList'),
-  tE: $('rightEmpty'),
   pT: $('pbTitle'),
   pA: $('pbArtist'),
   pTm: $('pbTime'),
@@ -65,8 +59,6 @@ const el = {
   mOv: $('modalOverlay'),
   mC: $('modalContent'),
   mX: $('modalClose'),
-  // NEU: unterer Panel-Bereich
-  contextPanel: $('contextPanel'),
   contextImg: $('contextImg'),
   contextMd: $('contextMd'),
   contextLogo: $('contextLogo')
@@ -79,7 +71,6 @@ function md(s) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    // Bilder: ![alt](url)
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="\$2" alt="\$1" class="md-img">')
     .replace(/^### (.+)$/gm, '<h3>\$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>\$1</h2>')
@@ -141,7 +132,6 @@ async function renderTabs() {
     const t = document.createElement('div');
     t.className = 'channel-tab' + (n === S.channel ? ' active' : '');
 
-    // Channel-Logo (erwartet ch.logo als Drive-ID)
     const ch = S.data[n];
     if (ch && ch.logo) {
       const logoUrl = await loadDriveFile(ch.logo);
@@ -157,20 +147,18 @@ async function renderTabs() {
     const label = document.createElement('span');
     label.textContent = n;
     t.appendChild(label);
-
     t.onclick = () => selectChannel(n);
     el.tabs.appendChild(t);
   }
   if (!S.channel || !S.data[S.channel]) selectChannel(names[0]);
 }
 
-// ═══ RENDER: LEFT ═══
+// ═══ RENDER: LEFT (Akkordeon) ═══
 function selectChannel(name) {
   S.channel = name;
   S.project = null;
   S.tracks = [];
   S.idx = -1;
-  // KEIN stop() mehr → Playback läuft weiter beim Channel-Wechsel
   renderTabs();
   renderLeft();
   renderRight();
@@ -183,7 +171,7 @@ function renderLeft() {
     return;
   }
 
-  // Tab-Titel: "Projekte" bei Hitproducer, "Themen" bei allen anderen (inkl. khaus)
+  // Tab-Titel: "Projekte" bei Hitproducer, "Themen" bei allen anderen
   el.lH.textContent = S.channel === 'Hitproducer' ? 'Projekte' : 'Themen';
 
   if (ch.md || ch.qr) {
@@ -201,113 +189,107 @@ function renderLeft() {
   el.lB.innerHTML = '';
   const items = ch.projects || [];
   if (!items.length) {
-    el.lB.innerHTML = '<div class="empty">Keine Projekte</div>';
+    el.lB.innerHTML = '<div class="empty">Keine ' + (S.channel === 'Hitproducer' ? 'Projekte' : 'Themen') + '</div>';
     return;
   }
 
-  const g = document.createElement('div');
-  g.className = 'project-grid';
+  const acc = document.createElement('div');
+  acc.className = 'accordion';
+
   items.forEach(p => {
-    const c = document.createElement('div');
-    c.className = 'project-card' + (p.name === S.project ? ' active' : '');
-    c.innerHTML =
-      (p.image ? `<img class="card-img" data-drive-id="${p.image}" alt="">` : '') +
-      `<div class="card-info"><div class="card-name">${p.name}</div>` +
-      `<div class="card-count">${p.tracks.length} Tracks</div></div>` +
-      (p.qr ? `<img class="card-qr" data-drive-id="$${p.qr}" data-qr-id="$${p.qr}">` : '');
-    c.onclick = () => selectProject(p);
-    const q = c.querySelector('.card-qr');
-    if (q) {
-      q.onclick = e => {
+    const isOpen = p.name === S.project;
+    const item = document.createElement('div');
+    item.className = 'accordion-item' + (isOpen ? ' open' : '');
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'accordion-header';
+    header.innerHTML =
+      '<span class="accordion-arrow">▶</span>' +
+      (p.image ? `<img class="accordion-img" data-drive-id="${p.image}" alt="">` : '') +
+      `<div class="accordion-info"><div class="accordion-name">${p.name}</div>` +
+      `<div class="accordion-count">${p.tracks.length} Tracks</div></div>` +
+      (p.qr ? `<img class="accordion-qr" data-drive-id="$${p.qr}" data-qr-id="$${p.qr}">` : '');
+    header.onclick = e => {
+      if (e.target.closest('.accordion-qr')) return;
+      toggleAccordion(p);
+    };
+
+    // QR-Button
+    const qr = header.querySelector('.accordion-qr');
+    if (qr) {
+      qr.onclick = e => {
         e.stopPropagation();
-        modal(`<img data-drive-id="${q.dataset.qrId}" alt="QR">`);
+        modal(`<img data-drive-id="${qr.dataset.qrId}" alt="QR">`);
       };
     }
-    g.appendChild(c);
+
+    item.appendChild(header);
+
+    // Body mit Tracks
+    const body = document.createElement('div');
+    body.className = 'accordion-body';
+    const ul = document.createElement('ul');
+    ul.className = 'track-list';
+
+    (p.tracks || []).forEach((t, ti) => {
+      const li = document.createElement('li');
+      const globalIdx = S.tracks.indexOf(t);
+      li.className = 'track-item' + (globalIdx >= 0 && globalIdx === S.idx ? ' active' : '');
+      li.innerHTML =
+        (t.image ? `<img class="track-thumb" data-drive-id="$${t.image}" alt="">` : `<span class="track-num">$${ti + 1}</span>`) +
+        `<div class="track-meta"><div class="track-name">${t.title}</div>` +
+        `<div class="track-artist">${t.artist}</div></div>` +
+        ((t.md || t.qr) ? '<button class="track-info-btn">i</button>' : '');
+      li.onclick = () => {
+        S.project = p.name;
+        S.tracks = p.tracks || [];
+        play(S.tracks.indexOf(t));
+      };
+      const ib = li.querySelector('.track-info-btn');
+      if (ib) {
+        ib.onclick = e => {
+          e.stopPropagation();
+          trackInfo(t);
+        };
+      }
+      ul.appendChild(li);
+    });
+
+    body.appendChild(ul);
+    item.appendChild(body);
+    acc.appendChild(item);
   });
-  el.lB.appendChild(g);
+
+  el.lB.appendChild(acc);
   hydrateImages(el.lB);
 }
 
-// ═══ RENDER: RIGHT ═══
-function selectProject(p) {
-  S.project = p.name;
-  S.tracks = p.tracks || [];
-  S.idx = -1;
-  // KEIN stop() → Playback läuft weiter beim Projekt-Wechsel
+function toggleAccordion(p) {
+  if (S.project === p.name) {
+    // Zuklappen
+    S.project = null;
+    S.tracks = [];
+    S.idx = -1;
+  } else {
+    // Aufklappen
+    S.project = p.name;
+    S.tracks = p.tracks || [];
+    S.idx = -1;
+  }
   renderLeft();
   renderRight();
 }
 
+// ═══ RENDER: RIGHT (nur Bild + Text) ═══
 async function renderRight() {
   const ch = S.data[S.channel];
   const proj = ch?.projects?.find(p => p.name === S.project);
-  el.rH.textContent = S.project || 'Tracks';
 
-  if (proj && (proj.md || proj.qr)) {
-    el.rI.style.display = 'flex';
-    el.rI.onclick = () => {
-      let h = '';
-      if (proj.qr) h += `<img data-drive-id="${proj.qr}" alt="QR">`;
-      if (proj.md) h += `<div class="md-body">${md(proj.md)}</div>`;
-      modal(h || '<p class="empty">Keine Infos</p>');
-    };
-  } else {
-    el.rI.style.display = 'none';
-  }
-
-  // Banner oben (wie bisher)
-  if (proj && proj.image) {
-    el.bA.style.display = 'block';
-    el.bI.src = '';
-    loadDriveFile(proj.image).then(url => { if (url) el.bI.src = url; });
-    if (proj.md) {
-      el.bO.style.display = 'flex';
-      el.bM.innerHTML = md(proj.md);
-    } else {
-      el.bO.style.display = 'none';
-    }
-  } else {
-    el.bA.style.display = 'none';
-  }
-
-  // Track-Liste (obere Hälfte des rechten Panels)
-  el.tL.innerHTML = '';
-  el.tE.style.display = S.tracks.length ? 'none' : 'block';
-  S.tracks.forEach((t, i) => {
-    const li = document.createElement('li');
-    li.className = 'track-item' + (i === S.idx ? ' active' : '');
-    li.innerHTML =
-      (t.image ? `<img class="track-thumb" data-drive-id="$${t.image}" alt="">` : `<span class="track-num">$${i + 1}</span>`) +
-      `<div class="track-meta"><div class="track-name">${t.title}</div>` +
-      `<div class="track-artist">${t.artist}</div></div>` +
-      ((t.md || t.qr) ? '<button class="track-info-btn">i</button>' : '');
-    li.onclick = () => play(i);
-    const ib = li.querySelector('.track-info-btn');
-    if (ib) {
-      ib.onclick = e => {
-        e.stopPropagation();
-        trackInfo(i);
-      };
-    }
-    el.tL.appendChild(li);
-  });
-  hydrateImages(el.tL);
-
-  // NEU: Kontext-Panel (untere Hälfte)
-  renderContextPanel(proj);
-}
-
-// ═══ NEU: CONTEXT PANEL (untere Hälfte rechts) ═══
-async function renderContextPanel(proj) {
-  const ch = S.data[S.channel];
-  el.contextPanel.style.display = 'flex';
-
-  // Priorität: 1) Aktiver Track → Track-Bild + Info
-  //            2) Gewähltes Projekt → Projekt-Bild + Info
-  //            3) Sonst → Channel-Logo
+  // Priorität: Aktiver Track → Projekt → Channel-Logo
   if (S.idx >= 0 && S.tracks[S.idx]) {
     const t = S.tracks[S.idx];
+    el.rH.textContent = t.title;
     el.contextLogo.style.display = 'none';
     if (t.image) {
       el.contextImg.style.display = 'block';
@@ -319,23 +301,31 @@ async function renderContextPanel(proj) {
     }
     el.contextMd.innerHTML = t.md ? md(t.md) : '';
   } else if (proj && proj.image) {
+    el.rH.textContent = proj.name;
     el.contextLogo.style.display = 'none';
     el.contextImg.style.display = 'block';
     el.contextImg.src = '';
     const url = await loadDriveFile(proj.image);
     if (url) el.contextImg.src = url;
     el.contextMd.innerHTML = proj.md ? md(proj.md) : '';
-  } else if (ch && ch.logo) {
+  } else if (proj && proj.md) {
+    el.rH.textContent = proj.name;
     el.contextImg.style.display = 'none';
-    el.contextMd.innerHTML = '';
+    el.contextLogo.style.display = 'none';
+    el.contextMd.innerHTML = md(proj.md);
+  } else if (ch && ch.logo) {
+    el.rH.textContent = S.channel || 'Info';
+    el.contextImg.style.display = 'none';
+    el.contextMd.innerHTML = ch.md ? md(ch.md) : '';
     el.contextLogo.style.display = 'block';
     el.contextLogo.src = '';
     const url = await loadDriveFile(ch.logo);
     if (url) el.contextLogo.src = url;
   } else {
+    el.rH.textContent = 'Info';
     el.contextImg.style.display = 'none';
     el.contextLogo.style.display = 'none';
-    el.contextMd.innerHTML = '<p class="empty">Kein Bild</p>';
+    el.contextMd.innerHTML = '<p class="empty">Keine Auswahl</p>';
   }
 }
 
@@ -346,8 +336,7 @@ function modal(html) {
   hydrateImages(el.mC);
 }
 
-function trackInfo(i) {
-  const t = S.tracks[i];
+function trackInfo(t) {
   let h = '';
   if (t.qr) h += `<img data-drive-id="${t.qr}" alt="QR">`;
   if (t.md) h += `<div class="md-body">${md(t.md)}</div>`;
@@ -367,6 +356,7 @@ async function play(i) {
 
   el.pT.textContent = t.title + ' (Lädt...)';
   el.pA.textContent = t.artist;
+  renderLeft();
   renderRight();
 
   const srcUrl = await loadDriveFile(t.audioId);
@@ -374,20 +364,18 @@ async function play(i) {
 
   el.pT.textContent = t.title;
   el.audio.src = srcUrl;
-  el.audio.currentTime = 0; // Neuer Track → bei 0 starten
+  el.audio.currentTime = 0;
   el.audio.play().catch(e => console.warn('Audio playback error:', e));
   S.playing = true;
   el.pPlay.textContent = '■';
 }
 
-// GEÄNDERT: Pause merkt sich die Position, Play setzt dort fort
 function togglePlay() {
   if (S.idx < 0) return;
   if (S.playing) {
     el.audio.pause();
     S.playing = false;
     el.pPlay.textContent = '▶';
-    // currentTime NICHT zurücksetzen → Position bleibt erhalten
   } else {
     el.audio.play().catch(e => console.warn('Audio playback error:', e));
     S.playing = true;
@@ -395,7 +383,6 @@ function togglePlay() {
   }
 }
 
-// stop() nur für expliziten Stopp (z.B. Projekt-Wechsel mit Reset)
 function stop() {
   el.audio.pause();
   el.audio.currentTime = 0;
