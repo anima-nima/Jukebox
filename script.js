@@ -1,17 +1,14 @@
 // ═══ CONFIG ═══
-const API_URL = 'https://google.com';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzH2ScZCKVnHEHxbUb8np1ouILBmE-dhqMcqHnJOSiyyqjNdXD873tn2ZtaTqbj8F7N/exec';
 const SYNC_MS = 1 * 60 * 1000;
+
 const fileCache = new Map();
 
-// Lädt Bilder und Audio über deine eingebaute action=media Funktion im Apps Script
 async function loadDriveFile(id) {
   if (!id) return '';
   if (fileCache.has(id)) return fileCache.get(id);
   try {
-    const res = await fetch(`${API_URL}?action=media&id=${encodeURIComponent(id)}`, {
-      method: 'GET',
-      redirect: 'follow'
-    });
+    const res = await fetch(`${API_URL}?action=media&id=${encodeURIComponent(id)}`, { redirect: 'follow' });
     const json = await res.json();
     if (json.base64 && json.mimeType) {
       const dataUrl = `data:${json.mimeType};base64,${json.base64}`;
@@ -35,17 +32,7 @@ function hydrateImages(container = document) {
 }
 
 // ═══ STATE ═══
-let S = {
-  data: {},
-  channel: null,
-  project: null,
-  tracks: [],       // Aktuell angezeigte Trackliste
-  playQueue: [],    // Trackliste des aktuell laufenden Projekts
-  idx: -1,          // Index in der playQueue
-  activeTrackId: null,
-  playing: false,
-  timer: null
-};
+let S = { data: {}, channel: null, project: null, tracks: [], idx: -1, playing: false, timer: null };
 
 // ═══ DOM (einmalig) ═══
 const $ = id => document.getElementById(id);
@@ -77,60 +64,35 @@ const el = {
   audio: $('audio'),
   mOv: $('modalOverlay'),
   mC: $('modalContent'),
-  mX: $('modalClose')
+  mX: $('modalClose'),
+  // NEU: unterer Panel-Bereich
+  contextPanel: $('contextPanel'),
+  contextImg: $('contextImg'),
+  contextMd: $('contextMd'),
+  contextLogo: $('contextLogo')
 };
 
-// ═══ MARKDOWN ═══
+// ═══ MARKDOWN (mit Bild-Support) ═══
 function md(s) {
   if (!s) return '';
-
-  // 1. Referenz-Definitionen (z. B. [image1]: <data:image/png;base64,...>) extrahieren
-  const refs = {};
-  let text = s.replace(/^\[([^\]]+)\]:\s*<?([^>\s]+)>?\s*$/gm, (_, id, url) => {
-    refs[id.toLowerCase()] = url;
-    return '';
-  });
-
-  // 2. Google-Docs Escapes & geschützte Leerzeichen bereinigen
-  text = text
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\\([\\`*_{}[\]()#+\-.!])/g, '$1');
-
-  // 3. Referenz-Bilder ![alt][id] und direkte Bilder ![alt](url) ersetzen
-  text = text.replace(/!\[([^\]]*)\]\[([^\]]+)\]/g, (_, alt, id) => {
-    const url = refs[id.toLowerCase()];
-    return url ? `<img src="${url}" alt="${alt}" style="max-width:100%;height:auto;">` : '';
-  });
-  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
-    return `<img src="${url}" alt="${alt}" style="max-width:100%;height:auto;">`;
-  });
-
-  // 4. HTML escapen (bereits erzeugte <img>-Tags vorher schützen)
-  const imgs = [];
-  text = text.replace(/<img [^>]+>/g, match => {
-    imgs.push(match);
-    return `%%%IMG_${imgs.length - 1}%%%`;
-  });
-
-  text = text
+  return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code>$1</code>')
-    .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
-    .replace(/^[-] (.+)$/gm, '<li>$1</li>')
-    .trim()
+    // Bilder: ![alt](url)
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="\$2" alt="\$1" class="md-img">')
+    .replace(/^### (.+)$/gm, '<h3>\$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>\$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>\$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>\$1</strong>')
+    .replace(/\*(.+?)\*\*/g, '<em>\$1</em>')
+    .replace(/`(.+?)`/g, '<code>\$1</code>')
+    .replace(/^&gt; (.+)$/gm, '<blockquote>\$1</blockquote>')
+    .replace(/^[-] (.+)$/gm, '<li>\$1</li>')
     .replace(/\n{2,}/g, '</p><p>')
     .replace(/\n/g, '<br>')
     .replace(/^/, '<p>')
     .replace(/$/, '</p>');
-
-  return text.replace(/%%%IMG_(\d+)%%%/g, (_, i) => imgs[i]);
 }
 
 // ═══ SYNC ═══
@@ -151,7 +113,6 @@ async function sync() {
   }
 }
 
-
 function startSync() {
   if (S.timer) clearInterval(S.timer);
   S.timer = setInterval(sync, SYNC_MS);
@@ -168,25 +129,39 @@ async function renderTop() {
   }
 }
 
-function renderTabs() {
+// ═══ RENDER: TABS (mit Channel-Logos) ═══
+async function renderTabs() {
   el.tabs.innerHTML = '';
   const names = Object.keys(S.data).filter(k => k !== '__jukebox');
   if (!names.length) {
     el.tabs.innerHTML = '<div class="empty">Keine Channels</div>';
     return;
   }
-  names.forEach(n => {
+  for (const n of names) {
     const t = document.createElement('div');
     t.className = 'channel-tab' + (n === S.channel ? ' active' : '');
-    t.textContent = n;
+
+    // Channel-Logo (erwartet ch.logo als Drive-ID)
+    const ch = S.data[n];
+    if (ch && ch.logo) {
+      const logoUrl = await loadDriveFile(ch.logo);
+      if (logoUrl) {
+        const logoImg = document.createElement('img');
+        logoImg.src = logoUrl;
+        logoImg.className = 'channel-tab-logo';
+        logoImg.alt = '';
+        t.appendChild(logoImg);
+      }
+    }
+
+    const label = document.createElement('span');
+    label.textContent = n;
+    t.appendChild(label);
+
     t.onclick = () => selectChannel(n);
     el.tabs.appendChild(t);
-  });
-  if (!S.channel || !S.data[S.channel]) {
-    selectChannel(names[0]);
-
-    
   }
+  if (!S.channel || !S.data[S.channel]) selectChannel(names[0]);
 }
 
 // ═══ RENDER: LEFT ═══
@@ -194,6 +169,8 @@ function selectChannel(name) {
   S.channel = name;
   S.project = null;
   S.tracks = [];
+  S.idx = -1;
+  // KEIN stop() mehr → Playback läuft weiter beim Channel-Wechsel
   renderTabs();
   renderLeft();
   renderRight();
@@ -205,7 +182,9 @@ function renderLeft() {
     el.lB.innerHTML = '<div class="empty">–</div>';
     return;
   }
-  el.lH.textContent = S.channel === 'kHaus' ? 'Themen' : 'Projekte';
+
+  // Tab-Titel: "Projekte" bei Hitproducer, "Themen" bei allen anderen (inkl. khaus)
+  el.lH.textContent = S.channel === 'Hitproducer' ? 'Projekte' : 'Themen';
 
   if (ch.md || ch.qr) {
     el.lI.style.display = 'flex';
@@ -218,22 +197,24 @@ function renderLeft() {
   } else {
     el.lI.style.display = 'none';
   }
+
   el.lB.innerHTML = '';
-  if (!ch.projects || !ch.projects.length) {
-    el.lB.innerHTML = S.channel === 'kHaus'
-      ? '<div class="empty">Keine Themen</div>'
-      : '<div class="empty">Keine Projekte</div>';
+  const items = ch.projects || [];
+  if (!items.length) {
+    el.lB.innerHTML = '<div class="empty">Keine Projekte</div>';
     return;
   }
+
   const g = document.createElement('div');
   g.className = 'project-grid';
-  ch.projects.forEach(p => {
+  items.forEach(p => {
     const c = document.createElement('div');
     c.className = 'project-card' + (p.name === S.project ? ' active' : '');
-    c.innerHTML = (p.image ? `<img class="card-img" data-drive-id="${p.image}" alt="">` : '') +
+    c.innerHTML =
+      (p.image ? `<img class="card-img" data-drive-id="${p.image}" alt="">` : '') +
       `<div class="card-info"><div class="card-name">${p.name}</div>` +
       `<div class="card-count">${p.tracks.length} Tracks</div></div>` +
-      (p.qr ? `<img class="card-qr" data-drive-id="${p.qr}" data-qr-id="${p.qr}">` : '');
+      (p.qr ? `<img class="card-qr" data-drive-id="$${p.qr}" data-qr-id="$${p.qr}">` : '');
     c.onclick = () => selectProject(p);
     const q = c.querySelector('.card-qr');
     if (q) {
@@ -252,6 +233,8 @@ function renderLeft() {
 function selectProject(p) {
   S.project = p.name;
   S.tracks = p.tracks || [];
+  S.idx = -1;
+  // KEIN stop() → Playback läuft weiter beim Projekt-Wechsel
   renderLeft();
   renderRight();
 }
@@ -260,6 +243,7 @@ async function renderRight() {
   const ch = S.data[S.channel];
   const proj = ch?.projects?.find(p => p.name === S.project);
   el.rH.textContent = S.project || 'Tracks';
+
   if (proj && (proj.md || proj.qr)) {
     el.rI.style.display = 'flex';
     el.rI.onclick = () => {
@@ -271,12 +255,12 @@ async function renderRight() {
   } else {
     el.rI.style.display = 'none';
   }
+
+  // Banner oben (wie bisher)
   if (proj && proj.image) {
     el.bA.style.display = 'block';
     el.bI.src = '';
-    loadDriveFile(proj.image).then(url => {
-      if (url) el.bI.src = url;
-    });
+    loadDriveFile(proj.image).then(url => { if (url) el.bI.src = url; });
     if (proj.md) {
       el.bO.style.display = 'flex';
       el.bM.innerHTML = md(proj.md);
@@ -286,17 +270,19 @@ async function renderRight() {
   } else {
     el.bA.style.display = 'none';
   }
+
+  // Track-Liste (obere Hälfte des rechten Panels)
   el.tL.innerHTML = '';
   el.tE.style.display = S.tracks.length ? 'none' : 'block';
   S.tracks.forEach((t, i) => {
     const li = document.createElement('li');
-    const isCurrentTrack = S.activeTrackId && t.id === S.activeTrackId;
-    li.className = 'track-item' + (isCurrentTrack ? ' active' : '');
-    li.innerHTML = (t.image ? `<img class="track-thumb" data-drive-id="${t.image}" alt="">` : `<span class="track-num">${i + 1}</span>`) +
+    li.className = 'track-item' + (i === S.idx ? ' active' : '');
+    li.innerHTML =
+      (t.image ? `<img class="track-thumb" data-drive-id="$${t.image}" alt="">` : `<span class="track-num">$${i + 1}</span>`) +
       `<div class="track-meta"><div class="track-name">${t.title}</div>` +
       `<div class="track-artist">${t.artist}</div></div>` +
       ((t.md || t.qr) ? '<button class="track-info-btn">i</button>' : '');
-    li.onclick = () => playFromView(i);
+    li.onclick = () => play(i);
     const ib = li.querySelector('.track-info-btn');
     if (ib) {
       ib.onclick = e => {
@@ -307,6 +293,50 @@ async function renderRight() {
     el.tL.appendChild(li);
   });
   hydrateImages(el.tL);
+
+  // NEU: Kontext-Panel (untere Hälfte)
+  renderContextPanel(proj);
+}
+
+// ═══ NEU: CONTEXT PANEL (untere Hälfte rechts) ═══
+async function renderContextPanel(proj) {
+  const ch = S.data[S.channel];
+  el.contextPanel.style.display = 'flex';
+
+  // Priorität: 1) Aktiver Track → Track-Bild + Info
+  //            2) Gewähltes Projekt → Projekt-Bild + Info
+  //            3) Sonst → Channel-Logo
+  if (S.idx >= 0 && S.tracks[S.idx]) {
+    const t = S.tracks[S.idx];
+    el.contextLogo.style.display = 'none';
+    if (t.image) {
+      el.contextImg.style.display = 'block';
+      el.contextImg.src = '';
+      const url = await loadDriveFile(t.image);
+      if (url) el.contextImg.src = url;
+    } else {
+      el.contextImg.style.display = 'none';
+    }
+    el.contextMd.innerHTML = t.md ? md(t.md) : '';
+  } else if (proj && proj.image) {
+    el.contextLogo.style.display = 'none';
+    el.contextImg.style.display = 'block';
+    el.contextImg.src = '';
+    const url = await loadDriveFile(proj.image);
+    if (url) el.contextImg.src = url;
+    el.contextMd.innerHTML = proj.md ? md(proj.md) : '';
+  } else if (ch && ch.logo) {
+    el.contextImg.style.display = 'none';
+    el.contextMd.innerHTML = '';
+    el.contextLogo.style.display = 'block';
+    el.contextLogo.src = '';
+    const url = await loadDriveFile(ch.logo);
+    if (url) el.contextLogo.src = url;
+  } else {
+    el.contextImg.style.display = 'none';
+    el.contextLogo.style.display = 'none';
+    el.contextMd.innerHTML = '<p class="empty">Kein Bild</p>';
+  }
 }
 
 // ═══ MODAL ═══
@@ -330,96 +360,104 @@ el.mOv.onclick = e => {
 };
 
 // ═══ PLAYBACK ═══
-function playFromView(i) {
+async function play(i) {
   if (i < 0 || i >= S.tracks.length) return;
-  S.playQueue = [...S.tracks];
+  S.idx = i;
+  const t = S.tracks[i];
+
+  el.pT.textContent = t.title + ' (Lädt...)';
+  el.pA.textContent = t.artist;
+  renderRight();
+
+  const srcUrl = await loadDriveFile(t.audioId);
+  if (!srcUrl || S.idx !== i) return;
+
+  el.pT.textContent = t.title;
+  el.audio.src = srcUrl;
+  el.audio.currentTime = 0; // Neuer Track → bei 0 starten
+  el.audio.play().catch(e => console.warn('Audio playback error:', e));
+  S.playing = true;
+  el.pPlay.textContent = '■';
+}
+
+// GEÄNDERT: Pause merkt sich die Position, Play setzt dort fort
+function togglePlay() {
+  if (S.idx < 0) return;
+  if (S.playing) {
+    el.audio.pause();
+    S.playing = false;
+    el.pPlay.textContent = '▶';
+    // currentTime NICHT zurücksetzen → Position bleibt erhalten
+  } else {
+    el.audio.play().catch(e => console.warn('Audio playback error:', e));
+    S.playing = true;
+    el.pPlay.textContent = '■';
+  }
+}
+
+// stop() nur für expliziten Stopp (z.B. Projekt-Wechsel mit Reset)
+function stop() {
+  el.audio.pause();
+  el.audio.currentTime = 0;
+  S.playing = false;
+  el.pPlay.textContent = '▶';
+  el.pTm.textContent = '0:00';
+  el.pP.value = 0;
+}
+
+function prev() {
+  if (!S.tracks.length) return;
+  play((S.idx - 1 + S.tracks.length) % S.tracks.length);
+}
+
+function next() {
+  if (!S.tracks.length) return;
+  play((S.idx + 1) % S.tracks.length);
+}
+
+function random() {
+  if (!S.tracks.length) return;
+  let i;
+  do {
+    i = Math.floor(Math.random() * S.tracks.length);
+  } while (i === S.idx && S.tracks.length > 1);
   play(i);
 }
 
-async function play(i) {
-  if (i < 0 || i >= S.playQueue.length) return;
-  S.idx = i;
-  const t = S.playQueue[i];
-S.activeTrackId = t.id;
-el.pT.textContent = t.title + ' (Lädt...)';
-el.pA.textContent = t.artist;
-renderRight();
-const srcUrl = await loadDriveFile(t.audioId);
-if (!srcUrl || S.idx !== i || S.activeTrackId !== t.id) return;
-el.pT.textContent = t.title;
-el.audio.src = srcUrl;
-el.audio.play().catch(e => console.warn('Audio playback error:', e));
-S.playing = true;
-el.pPlay.textContent = '■';
-}
-function togglePlay() {
-if (S.idx < 0 || !S.playQueue.length) return;
-if (S.playing) {
-stop();
-} else {
-el.audio.play().catch(e => console.warn('Audio playback error:', e));
-S.playing = true;
-el.pPlay.textContent = '■';
-}
-}
-function stop() {
-el.audio.pause();
-el.audio.currentTime = 0;
-S.playing = false;
-el.pPlay.textContent = '▶';
-el.pTm.textContent = '0:00';
-el.pP.value = 0;
-}
-function prev() {
-if (!S.playQueue.length) return;
-play((S.idx - 1 + S.playQueue.length) % S.playQueue.length);
-}
-function next() {
-if (!S.playQueue.length) return;
-play((S.idx + 1) % S.playQueue.length);
-}
-function random() {
-if (!S.playQueue.length) return;
-let i;
-do {
-i = Math.floor(Math.random() * S.playQueue.length);
-} while (i === S.idx && S.playQueue.length > 1);
-play(i);
-}
 // ═══ HELPERS ═══
 function fmt(s) {
-if (!isFinite(s)) return '0:00';
-return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  if (!isFinite(s)) return '0:00';
+  return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 }
+
 // ═══ EVENTS ═══
 el.pPlay.onclick = togglePlay;
 el.pPrev.onclick = prev;
 el.pNext.onclick = next;
 el.pRnd.onclick = random;
+
 el.audio.ontimeupdate = () => {
-if (el.audio.duration) {
-el.pTm.textContent = fmt(el.audio.currentTime);
-el.pP.value = (el.audio.currentTime / el.audio.duration) * 100;
-}
+  if (el.audio.duration) {
+    el.pTm.textContent = fmt(el.audio.currentTime);
+    el.pP.value = (el.audio.currentTime / el.audio.duration) * 100;
+  }
 };
 el.audio.onloadedmetadata = () => {
-el.pD.textContent = fmt(el.audio.duration);
+  el.pD.textContent = fmt(el.audio.duration);
 };
 el.audio.onended = next;
 el.pP.oninput = () => {
-if (el.audio.duration) el.audio.currentTime = (el.pP.value / 100) * el.audio.duration;
+  if (el.audio.duration) el.audio.currentTime = (el.pP.value / 100) * el.audio.duration;
 };
 document.onkeydown = e => {
-if (e.target.tagName === 'INPUT') return;
-if (e.code === 'Space') {
-e.preventDefault();
-togglePlay();
-}
-if (e.code === 'ArrowLeft') prev();
-if (e.code === 'ArrowRight') next();
-if (e.code === 'KeyR') random();
-if (e.code === 'Escape') el.mOv.classList.remove('open');
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  if (e.code === 'ArrowLeft') prev();
+  if (e.code === 'ArrowRight') next();
+  if (e.code === 'KeyR') random();
+  if (e.code === 'Escape') el.mOv.classList.remove('open');
 };
+
 // ═══ INIT ═══
 sync();
 startSync();
