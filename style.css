@@ -198,4 +198,13 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-seri
   .channel-tab{padding:8px 8px;font-size:.78rem}
   .channel-tab-logo{width:16px;height:16px}
   .context-img{max-height:140px}
+
+  /* ── QR-BUTTON (links neben Track) ── */
+.track-qr-btn{width:18px;height:18px;border-radius:4px;border:none;background:#2a2a4a;color:#888;cursor:pointer;font-size:.6rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.track-qr-btn:hover{background:#6c63ff33;color:#a78bfa}
+
+/* ── QR-MODAL ── */
+.qr-modal{text-align:center;padding:10px 0}
+.qr-modal img{max-width:220px;max-height:220px;border-radius:10px;background:#fff;padding:12px;margin:0 auto}
+.qr-hint{margin-top:16px;font-size:.82rem;color:#a78bfa;font-weight:500}
 }
