@@ -211,7 +211,7 @@ function renderLeft() {
       (p.image ? `<img class="accordion-img" data-drive-id="${p.image}" alt="">` : '') +
       `<div class="accordion-info"><div class="accordion-name">${p.name}</div>` +
       `<div class="accordion-count">${p.tracks.length} Tracks</div></div>` +
-      (p.qr ? `<img class="accordion-qr" data-drive-id="$${p.qr}" data-qr-id="$${p.qr}">` : '');
+      (p.qr ? `<img class="accordion-qr" data-drive-id="${p.qr}" data-qr-id="${p.qr}">` : '');
     header.onclick = e => {
       if (e.target.closest('.accordion-qr')) return;
       toggleAccordion(p);
@@ -237,7 +237,7 @@ function renderLeft() {
       const isActive = S.project === p.name && S.tracks.indexOf(t) === S.idx;
       li.className = 'track-item' + (isActive ? ' active' : '');
       li.innerHTML =
-        (t.image ? `<img class="track-thumb" data-drive-id="$${t.image}" alt="">` : `<span class="track-num">$${ti + 1}</span>`) +
+        (t.image ? `<img class="track-thumb" data-drive-id="${t.image}" alt="">` : `<span class="track-num">${ti + 1}</span>`) +
         `<div class="track-meta"><div class="track-name">${t.title}</div>` +
         `<div class="track-artist">${t.artist}</div></div>` +
         ((t.md || t.qr) ? '<button class="track-info-btn">i</button>' : '');
@@ -262,7 +262,14 @@ function renderLeft() {
   });
 
   el.lB.appendChild(acc);
-  hydrateImages(el.lB);
+
+  // Thumbnails direkt laden (nicht über hydrateImages)
+  el.lB.querySelectorAll('img[data-drive-id]').forEach(async img => {
+    const id = img.getAttribute('data-drive-id');
+    if (!id) return;
+    const url = await loadDriveFile(id);
+    if (url) img.src = url;
+  });
 }
 
 function toggleAccordion(p) {
