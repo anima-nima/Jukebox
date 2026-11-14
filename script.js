@@ -220,7 +220,7 @@ function renderLeft() {
       (p.image ? `<img class="accordion-img" data-drive-id="${p.image}" alt="">` : '') +
       `<div class="accordion-info"><div class="accordion-name">${p.name}</div>` +
       `<div class="accordion-count">${p.tracks.length} Tracks</div></div>` +
-      (p.qr ? `<img class="accordion-qr" data-drive-id="$${p.qr}" data-qr-id="$${p.qr}">` : '');
+      (p.qr ? `<img class="accordion-qr" data-drive-id="${p.qr}" data-qr-id="${p.qr}">` : '');
     header.onclick = e => {
       if (e.target.closest('.accordion-qr')) return;
       toggleAccordion(p);
@@ -245,16 +245,33 @@ function renderLeft() {
       const li = document.createElement('li');
       const isActive = S.project === p.name && S.tracks.indexOf(t) === S.idx;
       li.className = 'track-item' + (isActive ? ' active' : '');
+
+      // Thumbnail
+      let thumbHtml;
+      if (t.image) {
+        thumbHtml = `<img class="track-thumb" data-drive-id="${t.image}" alt="">`;
+      } else {
+        thumbHtml = `<span class="track-num">${ti + 1}</span>`;
+      }
+
+      // QR-Button
+      let qrHtml = '';
+      if (t.qr) {
+        qrHtml = '<button class="track-qr-btn" title="QR-Code anzeigen">🔗</button>';
+      }
+
       li.innerHTML =
-        (t.image ? `<img class="track-thumb" data-drive-id="$${t.image}" alt="">` : `<span class="track-num">$${ti + 1}</span>`) +
+        thumbHtml +
         `<div class="track-meta"><div class="track-name">${t.title}</div>` +
         `<div class="track-artist">${t.artist}</div></div>` +
-        (t.qr ? '<button class="track-qr-btn" title="QR-Code anzeigen">🔗</button>' : '');
+        qrHtml;
+
       li.onclick = () => {
         S.project = p.name;
         S.tracks = p.tracks || [];
         play(S.tracks.indexOf(t));
       };
+
       const qb = li.querySelector('.track-qr-btn');
       if (qb) {
         qb.onclick = e => {
@@ -262,6 +279,7 @@ function renderLeft() {
           showQR(t.qr);
         };
       }
+
       ul.appendChild(li);
     });
 
@@ -272,11 +290,16 @@ function renderLeft() {
 
   el.lB.appendChild(acc);
 
-  el.lB.querySelectorAll('img[data-drive-id]').forEach(async img => {
+  // Alle Bilder direkt laden
+  const allImgs = el.lB.querySelectorAll('img[data-drive-id]');
+  allImgs.forEach(async img => {
     const id = img.getAttribute('data-drive-id');
-    if (!id) return;
+    if (!id || img.dataset.loaded) return;
     const url = await loadDriveFile(id);
-    if (url) img.src = url;
+    if (url) {
+      img.src = url;
+      img.dataset.loaded = '1';
+    }
   });
 }
 
