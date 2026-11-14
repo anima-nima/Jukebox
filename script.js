@@ -71,7 +71,10 @@ function md(s) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="\$2" alt="\$1" class="md-img">')
+    // Drive-IDs (lange alphanumerische Strings): ![alt](ID) → <img data-drive-id>
+    .replace(/!\[([^\]]*)\]\(([a-zA-Z0-9_-]{20,})\)/g, '<img data-drive-id="\$2" alt="\$1" class="md-img">')
+    // Normale URLs: ![alt](https://...) → <img src>
+    .replace(/!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g, '<img src="\$2" alt="\$1" class="md-img">')
     .replace(/^### (.+)$/gm, '<h3>\$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>\$1</h2>')
     .replace(/^# (.+)$/gm, '<h1>\$1</h1>')
